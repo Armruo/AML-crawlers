@@ -19,6 +19,7 @@ import uuid
 from asgiref.sync import async_to_sync
 from .services import MistTrackScraperService
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +282,7 @@ class CrawlerViewSet(viewsets.ViewSet):
         super().__init__(**kwargs)
         self.scraper_service = MistTrackScraperService()
 
-    async def create(self, request):
+    def create(self, request):
         """Handle single URL crawling request"""
         serializer = CrawlerTaskSerializer(data=request.data)
         if not serializer.is_valid():
@@ -292,7 +293,16 @@ class CrawlerViewSet(viewsets.ViewSet):
 
         try:
             logger.info(f"Processing URL: {url}")
-            result = await self.scraper_service.get_address_info(url)
+            # Use sync_to_async to handle the async call
+            import asyncio
+            from asgiref.sync import sync_to_async
+            
+            # Create event loop for async operations
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Run async operations
+            result = loop.run_until_complete(self.scraper_service.get_address_info(url))
             
             if not result["success"]:
                 raise Exception(result["error"])
@@ -304,16 +314,28 @@ class CrawlerViewSet(viewsets.ViewSet):
                 "result": result["data"]
             }
             
-            # Send success notification through WebSocket
-            await self._send_ws_notification(task_id, "success", response_data)
+            # Send WebSocket notification
+            loop.run_until_complete(self._send_ws_notification(task_id, "success", response_data))
             logger.info(f"Successfully processed URL: {url}")
+            
+            # Clean up
+            loop.close()
+            
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             error_msg = f"Error processing URL {url}: {str(e)}"
             logger.error(error_msg)
+            
             # Send error notification through WebSocket
-            await self._send_ws_notification(task_id, "error", {"error": str(e)})
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self._send_ws_notification(task_id, "error", {"error": str(e)}))
+                loop.close()
+            except Exception as ws_error:
+                logger.error(f"Failed to send WebSocket notification: {str(ws_error)}")
+                
             return Response(
                 {"error": error_msg},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
