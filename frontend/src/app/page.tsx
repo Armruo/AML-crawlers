@@ -205,7 +205,14 @@ export default function Home() {
       title: 'Risk Level',
       dataIndex: ['result', 'risk_level'],
       key: 'risk_level',
-      render: (risk_level: string) => risk_level || '-',
+      render: (risk_level: string) => (
+        <span style={{ 
+          color: risk_level === 'Risky' ? '#ff4d4f' : 'inherit',
+          fontWeight: risk_level === 'Risky' ? 'bold' : 'normal'
+        }}>
+          {risk_level || '-'}
+        </span>
+      ),
     },
     {
       title: 'Risk Type',
