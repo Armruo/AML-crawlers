@@ -47,9 +47,14 @@ export default function Home() {
           network: message.result.network || message.result.address?.split('/')[0],
           status: 'success',
           result: {
+            risk_score: message.result.risk_score,
             risk_level: message.result.risk_level,
             risk_type: message.result.risk_type,
-            address_labels: message.result.address_labels ? [message.result.address_labels] : []
+            address_labels: message.result.address_labels ? [message.result.address_labels] : [],
+            volume: message.result.volume,
+            labels: message.result.labels || [],
+            transactions: message.result.transactions || [],
+            related_addresses: message.result.related_addresses || []
           }
         }]);
         setStats(prev => ({
@@ -126,29 +131,56 @@ export default function Home() {
 
   const uploadProps: UploadProps = {
     name: 'file',
+    accept: '.csv',
     action: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/crawler/upload_file/`,
     headers: {
       'Accept': 'application/json',
     },
+    data: {
+      network: form.getFieldValue('network')
+    },
+    beforeUpload: (file) => {
+      const network = form.getFieldValue('network');
+      if (!network) {
+        message.error('Please select a network before uploading a file');
+        return false;
+      }
+      
+      const isCSV = file.type === 'text/csv' || file.name.endsWith('.csv');
+      if (!isCSV) {
+        message.error('You can only upload CSV files!');
+        return false;
+      }
+      return true;
+    },
     onChange(info) {
-      if (info.file.status === 'done') {
+      if (info.file.status === 'uploading') {
+        message.loading('Uploading file...');
+      } else if (info.file.status === 'done') {
         console.log('Upload response:', info.file.response);
         message.success(`${info.file.name} uploaded successfully`);
         const addresses = info.file.response.results || [];
         const formattedAddresses = addresses.map((addr: any) => ({
           address: addr.address,
-          network: addr.network || addr.address?.split('/')[0],
-          status: 'success',
+          network: addr.network || form.getFieldValue('network'),
+          status: addr.status,
           result: {
-            risk_level: addr.risk_level,
-            risk_type: addr.risk_type,
-            address_labels: addr.address_labels ? [addr.address_labels] : []
+            risk_score: addr.data?.risk_score,
+            risk_level: addr.data?.risk_level,
+            risk_type: addr.data?.risk_type,
+            address_labels: addr.data?.address_labels ? [addr.data.address_labels] : [],
+            volume: addr.data?.volume,
+            labels: addr.data?.labels || [],
+            transactions: addr.data?.transactions || [],
+            related_addresses: addr.data?.related_addresses || []
           }
         }));
         setResults(prev => [...prev, ...formattedAddresses]);
         setStats(prev => ({
           ...prev,
-          total: prev.total + addresses.length
+          total: prev.total + addresses.length,
+          success: prev.success + addresses.filter((a: any) => a.status === 'success').length,
+          error: prev.error + addresses.filter((a: any) => a.status === 'error').length
         }));
       } else if (info.file.status === 'error') {
         console.error('File upload error:', info.file);
@@ -344,6 +376,9 @@ export default function Home() {
               <Upload {...uploadProps}>
                 <Button icon={<UploadOutlined />}>Upload Batch Task File</Button>
               </Upload>
+              <div className="text-sm text-gray-500 mt-2">
+                Please upload a CSV file with an "address" column. The file should be encoded in UTF-8 or GBK.
+              </div>
             </div>
 
             <AnimatePresence>
@@ -367,13 +402,32 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            <div className="mt-4">
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-4">Crawling Results</h3>
               <Table 
                 columns={columns} 
                 dataSource={results}
                 rowKey="address"
                 pagination={{ pageSize: 10 }}
+                className="shadow-sm"
               />
+              {results.length > 0 && (
+                <div className="mt-4 bg-gray-50 p-4 rounded">
+                  <h4 className="text-md font-medium mb-2">Latest Result Details</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Risk Score: {results[results.length - 1]?.result?.risk_score || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Risk Level: {results[results.length - 1]?.result?.risk_level || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Risk Type: {results[results.length - 1]?.result?.risk_type || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Network: {results[results.length - 1]?.network || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Labels: {results[results.length - 1]?.result?.address_labels?.join(', ') || 'None'}</p>
+                      <p className="text-sm text-gray-600">Volume: {results[results.length - 1]?.result?.volume || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
         </motion.div>

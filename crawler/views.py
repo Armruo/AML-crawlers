@@ -95,6 +95,7 @@ class CrawlerViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         uploaded_file = request.FILES['file']
+        network = request.data.get('network', 'ETH')  # Default to ETH if not provided
         task_id = str(uuid.uuid4())
 
         try:
@@ -102,21 +103,51 @@ class CrawlerViewSet(viewsets.ViewSet):
             path = default_storage.save(f'tmp/{uploaded_file.name}', ContentFile(uploaded_file.read()))
             full_path = default_storage.path(path)
 
-            # Read addresses from file
-            df = pd.read_csv(full_path)
-            addresses = df['address'].tolist() if 'address' in df.columns else []
-
-            if not addresses:
+            # Try different encodings to read the file
+            encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'latin1']
+            df = None
+            
+            for encoding in encodings_to_try:
+                try:
+                    df = pd.read_csv(full_path, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error reading CSV with encoding {encoding}: {str(e)}")
+                    continue
+            
+            if df is None:
                 return Response(
-                    {"error": "No addresses found in file"},
+                    {"error": "Unable to read the file. Please ensure it's a valid CSV file with UTF-8 or GBK encoding."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Verify the 'address' column exists
+            if 'address' not in df.columns:
+                return Response(
+                    {"error": "The CSV file must contain an 'address' column"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Clean the addresses (remove any whitespace and empty rows)
+            addresses = df['address'].astype(str).str.strip().dropna().tolist()
+
             # Process addresses
             results = []
-            for address in addresses:
+            total_addresses = len(addresses)
+            
+            for idx, address in enumerate(addresses, 1):
                 try:
-                    scraper_service = MistTrackScraperService(address=address, network='mainnet')
+                    # Send progress update
+                    self._send_ws_notification(task_id, "processing", {
+                        "progress": (idx / total_addresses) * 100,
+                        "current": idx,
+                        "total": total_addresses,
+                        "address": address
+                    })
+
+                    scraper_service = MistTrackScraperService(address=address, network=network)
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     result = loop.run_until_complete(scraper_service.get_address_info())
@@ -125,36 +156,46 @@ class CrawlerViewSet(viewsets.ViewSet):
                     if result["success"]:
                         results.append({
                             "address": address,
+                            "network": network,
                             "status": "success",
                             "data": result["data"]
                         })
                     else:
                         results.append({
                             "address": address,
+                            "network": network,
                             "status": "error",
                             "error": result["error"]
                         })
                 except Exception as e:
                     results.append({
                         "address": address,
+                        "network": network,
                         "status": "error",
                         "error": str(e)
                     })
 
-            # Clean up
+            # Clean up temporary file
             default_storage.delete(path)
 
-            # Send final results
-            self._send_ws_notification(task_id, "completed", {"results": results})
+            # Send completion notification
+            self._send_ws_notification(task_id, "completed", {
+                "progress": 100,
+                "results": results
+            })
+
             return Response({
                 "task_id": task_id,
-                "status": "completed",
-                "data": {"results": results}
+                "results": results
             })
 
         except Exception as e:
-            logger.error(f"Error processing file: {str(e)}")
-            self._send_ws_notification(task_id, "error", {"error": str(e)})
+            logger.error(f"Error processing file upload: {str(e)}")
+            # Clean up temporary file if it exists
+            try:
+                default_storage.delete(path)
+            except:
+                pass
             return Response(
                 {"error": f"Error processing file: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
