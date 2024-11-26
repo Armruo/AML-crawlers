@@ -16,12 +16,12 @@ class EthereumAddressField(serializers.Field):
         return value
 
 class CrawlerTaskSerializer(serializers.Serializer):
-    url = EthereumAddressField()
+    address = EthereumAddressField()
     status = serializers.CharField(read_only=True)
     result = serializers.JSONField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
-    def validate_url(self, value):
+    def validate_address(self, value):
         if not value:
             logger.error("Ethereum address is required")
             raise serializers.ValidationError("Ethereum address is required")

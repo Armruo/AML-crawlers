@@ -87,7 +87,7 @@ export default function Home() {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ url: values.url }),
+        body: JSON.stringify({ address: values.url }),
       });
       
       if (!response.ok) {
@@ -173,7 +173,7 @@ export default function Home() {
             <pre style={{ maxHeight: '100px', overflow: 'auto' }}>
               {JSON.stringify(result, null, 2)}
             </pre>
-          ) : '-'}
+          ) : '-' }
         </motion.div>
       ),
     },
