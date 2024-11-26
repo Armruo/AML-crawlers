@@ -136,8 +136,11 @@ export default function Home() {
     headers: {
       'Accept': 'application/json',
     },
-    data: {
-      network: form.getFieldValue('network')
+    data: (file) => {
+      const network = form.getFieldValue('network');
+      return {
+        network: network || 'ETH'  // 默认使用ETH网络
+      };
     },
     beforeUpload: (file) => {
       const network = form.getFieldValue('network');
@@ -352,16 +355,16 @@ export default function Home() {
           transition={{ delay: 0.3 }}
         >
           <Card className="mt-4">
-            <Form form={form} onFinish={onFinish} layout="vertical">
+            <Form form={form} onFinish={onFinish} layout="inline" className="mb-4">
               <Form.Item
-                label="Network"
                 name="network"
+                label="Network"
                 rules={[{ required: true, message: 'Please select a network' }]}
               >
-                <Select placeholder="Select a network">
+                <Select style={{ width: 120 }}>
                   <Select.Option value="ETH">ETH</Select.Option>
                   <Select.Option value="BSC">BSC</Select.Option>
-                  <Select.Option value="Solana">Solana</Select.Option>
+                  <Select.Option value="SOL">SOL</Select.Option>
                 </Select>
               </Form.Item>
               <Form.Item

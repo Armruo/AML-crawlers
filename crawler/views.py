@@ -95,7 +95,10 @@ class CrawlerViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         uploaded_file = request.FILES['file']
-        network = request.data.get('network', 'ETH')  # Default to ETH if not provided
+        network = request.data.get('network', 'ETH')  # 默认使用ETH网络
+        if not network or network.lower() == 'undefined':
+            network = 'ETH'
+            logger.info(f"Using default network: {network}")
         task_id = str(uuid.uuid4())
 
         try:

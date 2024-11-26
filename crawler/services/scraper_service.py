@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class MistTrackScraperService:
     def __init__(self, address: str, network: str = 'ETH'):
         self.address = address
-        self.network = network
+        self.network = network if network and network.lower() != 'undefined' else 'ETH'
         self.base_url = f"https://misttrack.io/aml_risks/{self.network}/{self.address}"
         self.validator = CryptoAddressValidator()
         self.scraper = UndetectedScraper()
