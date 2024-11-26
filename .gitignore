@@ -64,3 +64,4 @@ yarn-error.log*
 uploads/
 crawler.log
 test_crawler.log
+google-chrome-stable_current_amd64.deb
