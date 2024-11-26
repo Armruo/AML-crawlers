@@ -44,8 +44,13 @@ export default function Home() {
       if (message.status === 'completed' && message.result) {
         setResults(prev => [...prev, {
           address: message.address,
+          network: message.result.network || message.result.address?.split('/')[0],
           status: 'success',
-          result: message.result
+          result: {
+            risk_level: message.result.risk_level,
+            risk_type: message.result.risk_type,
+            address_labels: message.result.address_labels ? [message.result.address_labels] : []
+          }
         }]);
         setStats(prev => ({
           ...prev,
@@ -130,7 +135,17 @@ export default function Home() {
         console.log('Upload response:', info.file.response);
         message.success(`${info.file.name} uploaded successfully`);
         const addresses = info.file.response.results || [];
-        setResults(prev => [...prev, ...addresses]);
+        const formattedAddresses = addresses.map((addr: any) => ({
+          address: addr.address,
+          network: addr.network || addr.address?.split('/')[0],
+          status: 'success',
+          result: {
+            risk_level: addr.risk_level,
+            risk_type: addr.risk_type,
+            address_labels: addr.address_labels ? [addr.address_labels] : []
+          }
+        }));
+        setResults(prev => [...prev, ...formattedAddresses]);
         setStats(prev => ({
           ...prev,
           total: prev.total + addresses.length
@@ -149,36 +164,28 @@ export default function Home() {
       key: 'address',
     },
     {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => (
-        <motion.span
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={{ color: status === 'success' ? '#52c41a' : '#f5222d' }}
-        >
-          {status === 'success' ? 'Success' : 'Failed'}
-        </motion.span>
-      ),
+      title: 'Network',
+      dataIndex: 'network',
+      key: 'network',
+      render: (network: string) => network || '-',
     },
     {
-      title: 'Result',
-      dataIndex: 'result',
-      key: 'result',
-      render: (result: any) => (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          transition={{ duration: 0.3 }}
-        >
-          {result ? (
-            <pre style={{ maxHeight: '100px', overflow: 'auto' }}>
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          ) : '-' }
-        </motion.div>
-      ),
+      title: 'Risk Level',
+      dataIndex: ['result', 'risk_level'],
+      key: 'risk_level',
+      render: (risk_level: string) => risk_level || '-',
+    },
+    {
+      title: 'Risk Type',
+      dataIndex: ['result', 'risk_type'],
+      key: 'risk_type',
+      render: (risk_type: string) => risk_type || '-',
+    },
+    {
+      title: 'Address Labels',
+      dataIndex: ['result', 'address_labels'],
+      key: 'address_labels',
+      render: (labels: string[]) => labels ? labels.join(', ') : '-',
     },
   ];
 

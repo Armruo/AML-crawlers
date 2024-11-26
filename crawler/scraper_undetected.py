@@ -96,7 +96,7 @@ class UndetectedScraper:
                 "transactions": self._extract_transactions(soup),
                 "related_addresses": self._extract_related_addresses(soup),
                 "table_data": table_data,  # 添加表格数据
-                "raw_html": page_source
+                # "raw_html": page_source
             }
             
             # 如果表格数据存在，使用它来更新风险类型和标签
