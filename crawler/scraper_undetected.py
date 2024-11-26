@@ -37,6 +37,14 @@ class UndetectedScraper:
                 EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
             )
             
+            # 等待loading消失
+            try:
+                WebDriverWait(self.driver, 30).until_not(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, ".el-loading-mask"))
+                )
+            except Exception as e:
+                logger.warning(f"Timeout waiting for loading to complete: {str(e)}")
+            
             # 等待一段时间让JavaScript执行完成
             time.sleep(5)
             
@@ -50,26 +58,53 @@ class UndetectedScraper:
             
             # 尝试从JavaScript状态中获取数据
             try:
-                risk_data = self.driver.execute_script(
-                    "return window.__NUXT__.state.address.addressInfo"
-                )
-                logger.info(f"Risk data from JavaScript: {risk_data}")
+                # 尝试多个可能的JavaScript状态路径
+                js_paths = [
+                    "return window.__NUXT__.state.address.addressInfo",
+                    "return window.__NUXT__.state.address",
+                    "return window.__NUXT__.state",
+                    "return window.__INITIAL_STATE__",
+                ]
+                
+                risk_data = None
+                for js_path in js_paths:
+                    try:
+                        risk_data = self.driver.execute_script(js_path)
+                        if risk_data:
+                            logger.info(f"Successfully extracted risk data from {js_path}")
+                            break
+                    except Exception as e:
+                        logger.debug(f"Failed to extract from {js_path}: {str(e)}")
+                
+                if risk_data:
+                    logger.info(f"Risk data from JavaScript: {risk_data}")
             except Exception as e:
                 logger.error(f"Error extracting risk data from JavaScript: {str(e)}")
                 risk_data = None
+            
+            # 提取表格数据
+            table_data = self._extract_table_data(soup)
             
             # 提取所需信息
             result = {
                 "address": address,
                 "risk_score": self._extract_risk_score(soup),
                 "risk_level": self._extract_risk_level(soup, risk_data),
-                "risk_type": self._extract_risk_type(soup),
+                "risk_type": self._extract_risk_type(soup, risk_data),
                 "address_labels": self._extract_address_labels(soup),
                 "labels": self._extract_labels(soup),
                 "transactions": self._extract_transactions(soup),
                 "related_addresses": self._extract_related_addresses(soup),
+                "table_data": table_data,  # 添加表格数据
                 "raw_html": page_source
             }
+            
+            # 如果表格数据存在，使用它来更新风险类型和标签
+            if table_data:
+                first_row = table_data[0]
+                result["risk_type"] = first_row.get("Risk Type", "Unknown")
+                result["address_labels"] = first_row.get("Address/Risk Label", "Unknown")
+                result["volume"] = first_row.get("Volume(USD)/%", "Unknown")
             
             logger.info(f"Extracted data for address {address}")
             return result
@@ -105,20 +140,22 @@ class UndetectedScraper:
     def _extract_risk_level(self, soup, risk_data=None):
         """提取风险等级"""
         try:
-            # 首先尝试从JavaScript数据中获取
-            if risk_data and isinstance(risk_data, dict):
-                risk_level = risk_data.get("riskLevel")
-                if risk_level:
-                    return risk_level
-
+            # 首先尝试从JavaScript数据中提取
+            if risk_data:
+                if isinstance(risk_data, dict):
+                    # 尝试多个可能的键名
+                    for key in ['riskLevel', 'risk_level', 'level', 'risk']:
+                        if key in risk_data:
+                            return str(risk_data[key])
+            
             # 尝试多个可能的选择器
             selectors = [
                 '.risk-level',
-                '.risk-status',
                 '[data-risk-level]',
                 'div.risk-level',
                 'span.risk-level',
-                'div.risk-status'
+                '.risk-score',
+                '[data-risk-score]'
             ]
             
             for selector in selectors:
@@ -142,29 +179,63 @@ class UndetectedScraper:
                     if next_text:
                         return next_text.strip()
             
+            # 尝试在表格中查找
+            table = soup.find('table', class_='el-table__body')
+            if table:
+                rows = table.find_all('tr')
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) >= 2:
+                        # 检查第一个单元格是否包含风险相关文本
+                        if any(risk_text in cells[0].text.lower() for risk_text in ['risk', 'level', 'score']):
+                            return cells[1].text.strip()
+            
             return "Unknown"
         except Exception as e:
             logger.error(f"Error extracting risk level: {str(e)}")
             return "Unknown"
 
-    def _extract_risk_type(self, soup):
+    def _extract_risk_type(self, soup, risk_data=None):
         """提取风险类型"""
         try:
+            # 首先尝试从JavaScript数据中提取
+            if risk_data:
+                if isinstance(risk_data, dict):
+                    # 尝试多个可能的键名
+                    for key in ['riskType', 'risk_type', 'type', 'category']:
+                        if key in risk_data:
+                            return str(risk_data[key])
+            
+            # 尝试从表格中提取
+            table = soup.find('table', class_='el-table__body')
+            if table:
+                rows = table.find_all('tr')
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) >= 1:
+                        risk_type_text = cells[0].text.strip()
+                        if risk_type_text and risk_type_text.lower() != 'risk type':
+                            return risk_type_text
+            
             # 尝试多个可能的选择器
             selectors = [
                 '.risk-type',
                 '.risk-category',
                 '[data-risk-type]',
                 'div.risk-type',
-                'span.risk-type'
+                'span.risk-type',
+                'td.el-table_1_column_1'  # 特定的表格列选择器
             ]
             
             for selector in selectors:
-                element = soup.select_one(selector)
-                if element:
+                elements = soup.select(selector)
+                for element in elements:
                     if selector == '[data-risk-type]':
-                        return element.get('data-risk-type', 'Unknown')
-                    return element.text.strip()
+                        risk_type = element.get('data-risk-type')
+                    else:
+                        risk_type = element.text.strip()
+                    if risk_type and risk_type.lower() != 'risk type':
+                        return risk_type
             
             # 尝试查找包含"Risk Type"文本的元素
             risk_type_element = soup.find(text=lambda t: t and 'Risk Type' in t)
@@ -314,6 +385,30 @@ class UndetectedScraper:
             return list(set(addresses))  # 去重
         except Exception as e:
             logger.error(f"Error extracting related addresses: {str(e)}")
+            return []
+
+    def _extract_table_data(self, soup):
+        """提取表格数据"""
+        try:
+            table_data = []
+            table = soup.find('table', class_='el-table__body')
+            if table:
+                rows = table.find_all('tr', class_='el-table__row')
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) >= 3:
+                        risk_type = cells[0].get_text(strip=True)
+                        label = cells[1].get_text(strip=True)
+                        volume = cells[2].get_text(strip=True)
+                        
+                        table_data.append({
+                            "Risk Type": risk_type,
+                            "Address/Risk Label": label,
+                            "Volume(USD)/%": volume
+                        })
+            return table_data
+        except Exception as e:
+            logger.error(f"Error extracting table data: {str(e)}")
             return []
 
     def __del__(self):
