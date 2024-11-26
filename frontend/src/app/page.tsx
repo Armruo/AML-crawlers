@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Layout, Form, Input, Button, Upload, Table, message, Card, Progress, Statistic, Row, Col, Spin } from 'antd';
+import { Layout, Form, Input, Button, Upload, Table, message, Card, Progress, Statistic, Row, Col, Spin, Select } from 'antd';
 import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadProps } from 'antd';
@@ -87,7 +87,10 @@ export default function Home() {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ address: values.url }),
+        body: JSON.stringify({ 
+          address: values.url,
+          network: values.network 
+        }),
       });
       
       if (!response.ok) {
@@ -97,7 +100,7 @@ export default function Home() {
           statusText: response.statusText,
           error: errorData
         });
-        message.error(`Failed to submit task: ${errorData.error || 'Unknown error'}`);
+        message.error(`Failed to submit task: ${JSON.stringify(errorData.error || errorData)}`);
         return;
       }
       
@@ -304,6 +307,17 @@ export default function Home() {
         >
           <Card className="mt-4">
             <Form form={form} onFinish={onFinish} layout="vertical">
+              <Form.Item
+                label="Network"
+                name="network"
+                rules={[{ required: true, message: 'Please select a network' }]}
+              >
+                <Select placeholder="Select a network">
+                  <Select.Option value="ETH">ETH</Select.Option>
+                  <Select.Option value="BSC">BSC</Select.Option>
+                  <Select.Option value="Solana">Solana</Select.Option>
+                </Select>
+              </Form.Item>
               <Form.Item
                 label="Address"
                 name="url"

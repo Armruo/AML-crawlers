@@ -1,80 +1,103 @@
 import logging
-from ..validators import CryptoAddressValidator
 import cloudscraper
+import asyncio
+import aiohttp
 from bs4 import BeautifulSoup
 from typing import Dict, Any, Optional
+from ..validators import CryptoAddressValidator
+from ..scraper_undetected import UndetectedScraper
+import json
 
 logger = logging.getLogger(__name__)
 
 class MistTrackScraperService:
-    def __init__(self):
-        self.base_url = "https://misttrack.io/aml_risks"
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept": "application/json"
-        }
-        self.session = self._create_scraper_session()
+    def __init__(self, address: str, network: str = 'ETH'):
+        self.address = address
+        self.network = network
+        self.base_url = f"https://misttrack.io/aml_risks/{self.network}/{self.address}"
         self.validator = CryptoAddressValidator()
+        self.scraper = UndetectedScraper()
 
-    @staticmethod
-    def _create_scraper_session():
-        return cloudscraper.create_scraper(
-            browser={
-                'browser': 'chrome',
-                'platform': 'windows',
-                'mobile': False
-            }
-        )
-
-    async def _make_request(self, url: str, method: str = "GET", data: Optional[Dict] = None, params: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make HTTP request with error handling and retries"""
+    async def _make_request(self, url: str) -> Dict[str, Any]:
+        """Make HTTP request using UndetectedScraper"""
         try:
-            logger.debug(f"Making {method} request to {url}")
+            # 在事件循环的默认线程池中运行同步的scraper
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                self.scraper.search_address,
+                f"{self.network}/{self.address}"
+            )
             
-            if method == "GET":
-                response = self.session.get(url, headers=self.headers, params=params)
-            else:
-                response = self.session.post(url, headers=self.headers, json=data)
+            if "error" in result:
+                return {"success": False, "error": result["error"]}
             
-            response.raise_for_status()
-            return {"success": True, "data": response}
+            return {"success": True, "data": result}
             
         except Exception as e:
-            logger.error(f"Request failed: {str(e)}")
+            logger.error(f"Error making request: {str(e)}")
             return {"success": False, "error": str(e)}
 
-    async def get_address_info(self, address: str) -> Dict[str, Any]:
+    async def get_address_info(self) -> Dict[str, Any]:
         """Get information about a crypto address"""
-        if not self.validator.validate(address):
-            return {"success": False, "error": "Invalid address format"}
-
-        url = f"{self.base_url}/address/{address}"
-        response = await self._make_request(url)
+        logger.info(f"Getting info for address {self.address} on network {self.network}")
         
-        if not response["success"]:
-            return response
+        valid, message, _ = self.validator.validate(self.address)
+        if not valid:
+            logger.error(f"Invalid address format: {self.address}")
+            return {"success": False, "error": message}
 
         try:
-            soup = BeautifulSoup(response["data"].text, 'html.parser')
+            logger.info(f"Making request for address {self.address}")
+            response = await self._make_request(self.base_url)
+            
+            if not response["success"]:
+                logger.error(f"Request failed: {response['error']}")
+                return response
+            
+            # 直接返回从UndetectedScraper获取的数据
+            result_data = response["data"]
+            logger.info(f"Successfully retrieved data: {result_data}")
+            
+            # 确保所有列表字段都是列表类型
+            if isinstance(result_data, dict):
+                for key in ["labels", "transactions", "related_addresses"]:
+                    if key in result_data and not isinstance(result_data[key], list):
+                        result_data[key] = list(result_data[key]) if result_data[key] else []
+            
             return {
                 "success": True,
-                "data": {
-                    "risk_score": self._extract_risk_score(soup),
-                    "labels": self._extract_labels(soup),
-                    "transactions": self._extract_transactions(soup),
-                    "related_addresses": self._extract_related_addresses(soup)
-                }
+                "data": result_data
             }
+            
         except Exception as e:
-            logger.error(f"Error parsing address info: {str(e)}")
-            return {"success": False, "error": "Error parsing response"}
+            logger.error(f"Error fetching address info: {str(e)}")
+            return {"success": False, "error": str(e)}
 
     def _extract_risk_score(self, soup: BeautifulSoup) -> Optional[int]:
+        """Extract risk score from the page"""
         try:
             risk_element = soup.find('div', {'class': 'risk-score'})
             return int(risk_element.text) if risk_element else None
         except Exception as e:
-            logger.warning(f"Error extracting risk score: {str(e)}")
+            logger.error(f"Error extracting risk score: {str(e)}")
+            return None
+
+    def _extract_risk_level(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract risk level from the page"""
+        try:
+            risk_level_element = (
+                soup.find('div', {'class': 'risk-level'}) or
+                soup.find('span', {'class': 'risk-level'}) or
+                soup.find('div', text=lambda t: t and 'Risk Level' in t)
+            )
+            if risk_level_element:
+                if 'Risk Level' in risk_level_element.text:
+                    return risk_level_element.find_next(text=True).strip()
+                return risk_level_element.text.strip()
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting risk level: {str(e)}")
             return None
 
     def _extract_labels(self, soup: BeautifulSoup) -> list:

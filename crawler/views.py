@@ -23,16 +23,15 @@ logger = logging.getLogger(__name__)
 class CrawlerViewSet(viewsets.ViewSet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.scraper_service = MistTrackScraperService()
         self.validator = CryptoAddressValidator()
 
-    def create(self, request):
-        """Handle single URL crawling request"""
+    def create(self, request, *args, **kwargs):
         serializer = CrawlerTaskSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         address = serializer.validated_data['address']
+        network = serializer.validated_data['network']
         task_id = str(uuid.uuid4())
 
         # 验证地址格式
@@ -42,28 +41,34 @@ class CrawlerViewSet(viewsets.ViewSet):
 
         try:
             # 使用 scraper_service 获取地址信息
+            scraper_service = MistTrackScraperService(address=address, network=network)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(self.scraper_service.get_address_info(address))
+            result = loop.run_until_complete(scraper_service.get_address_info())
             loop.close()
 
             if not result["success"]:
                 self._send_ws_notification(task_id, "error", {"error": result["error"]})
                 return Response({"error": result["error"]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # 发送WebSocket通知
-            self._send_ws_notification(task_id, "completed", result["data"])
+            # 发送成功通知
+            self._send_ws_notification(task_id, "completed", {
+                "address": address,
+                "result": result["data"]
+            })
+
             return Response({
                 "task_id": task_id,
                 "status": "completed",
-                "data": result["data"]
+                "address": address,
+                "result": result["data"]
             })
 
         except Exception as e:
-            logger.error(f"Error processing address {address}: {str(e)}")
+            logger.error(f"Error processing request: {str(e)}")
             self._send_ws_notification(task_id, "error", {"error": str(e)})
             return Response(
-                {"error": f"Error processing address: {str(e)}"},
+                {"error": "Internal server error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -111,9 +116,10 @@ class CrawlerViewSet(viewsets.ViewSet):
             results = []
             for address in addresses:
                 try:
+                    scraper_service = MistTrackScraperService(address=address, network='mainnet')
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                    result = loop.run_until_complete(self.scraper_service.get_address_info(address))
+                    result = loop.run_until_complete(scraper_service.get_address_info())
                     loop.close()
 
                     if result["success"]:

@@ -17,6 +17,7 @@ class EthereumAddressField(serializers.Field):
 
 class CrawlerTaskSerializer(serializers.Serializer):
     address = EthereumAddressField()
+    network = serializers.ChoiceField(choices=['ETH', 'BSC', 'Solana'])
     status = serializers.CharField(read_only=True)
     result = serializers.JSONField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
