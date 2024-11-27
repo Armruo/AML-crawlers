@@ -66,6 +66,7 @@ export default function Home() {
     error: 0,
     inProgress: 0
   });
+  const [processedAddressNetworks, setProcessedAddressNetworks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
@@ -114,7 +115,11 @@ export default function Home() {
         };
 
         console.log('Adding new result:', newResult);
-        setResults(prev => [...prev, newResult]);
+        setResults(prev => {
+          const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
+          if (existingAddressNetworks.has(`${newResult.address}-${newResult.network}`)) return prev;
+          return [...prev, newResult];
+        });
         
         // 更新进度
         setTaskProgress(prev => {
@@ -161,7 +166,11 @@ export default function Home() {
         };
 
         console.log('Adding error result:', newResult);
-        setResults(prev => [...prev, newResult]);
+        setResults(prev => {
+          const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
+          if (existingAddressNetworks.has(`${newResult.address}-${newResult.network}`)) return prev;
+          return [...prev, newResult];
+        });
         
         // 更新进度
         setTaskProgress(prev => {
@@ -326,9 +335,9 @@ export default function Home() {
         
         // 更新结果列表，过滤掉重复地址
         setResults(prev => {
-          const existingAddresses = new Set(prev.map(item => item.address));
+          const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
           const newUniqueAddresses = formattedAddresses.filter(
-            item => !existingAddresses.has(item.address)
+            item => !existingAddressNetworks.has(`${item.address}-${item.network}`)
           );
           return [...prev, ...newUniqueAddresses];
         });
