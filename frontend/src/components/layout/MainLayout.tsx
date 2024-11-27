@@ -107,7 +107,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
           paddingLeft: 24
         }}>
-          <Title level={4} style={{ margin: 0 }}>Web Crawler Management System</Title>
+          <Title level={4} style={{ margin: 0 }}>AML Crawler Management System</Title>
         </Header>
         <Content style={{ margin: '24px 16px 0', overflow: 'initial' }}>
           <div

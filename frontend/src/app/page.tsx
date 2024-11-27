@@ -735,7 +735,12 @@ export default function Home() {
                 rowClassName={(record) => record.status === 'error' ? 'error-row' : ''}
                 title={() => (
                   results.length > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-16px' }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'flex-end', 
+                      marginBottom: '2px',
+                      paddingBottom: '1px'
+                    }}>
                       <Button 
                         type="primary"
                         icon={<DownloadOutlined />}
