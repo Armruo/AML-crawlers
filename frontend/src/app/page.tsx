@@ -33,6 +33,7 @@ interface TaskProgress {
   error?: string;
   current?: number;
   total?: number;
+  progress?: number;
 }
 
 interface CrawlerResult {
@@ -73,7 +74,6 @@ export default function Home() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       const message = data.message as TaskProgress;
-      setTaskProgress(message);
       
       console.log('Raw WebSocket message:', data);
       
@@ -116,6 +116,19 @@ export default function Home() {
         console.log('Adding new result:', newResult);
         setResults(prev => [...prev, newResult]);
         
+        // 更新进度
+        setTaskProgress(prev => {
+          if (!prev) return null;
+          const current = (prev.current || 0) + 1;
+          const total = prev.total || 0;
+          return {
+            ...prev,
+            status: current >= total ? 'completed' : 'processing',
+            current,
+            progress: Math.round((current / total) * 100)
+          };
+        });
+        
         setStats(prev => ({
           ...prev,
           success: prev.success + 1,
@@ -150,12 +163,35 @@ export default function Home() {
         console.log('Adding error result:', newResult);
         setResults(prev => [...prev, newResult]);
         
+        // 更新进度
+        setTaskProgress(prev => {
+          if (!prev) return null;
+          const current = (prev.current || 0) + 1;
+          const total = prev.total || 0;
+          return {
+            ...prev,
+            status: current >= total ? 'completed' : 'processing',
+            current,
+            progress: Math.round((current / total) * 100)
+          };
+        });
+        
         setStats(prev => ({
           ...prev,
           error: prev.error + 1,
           inProgress: Math.max(0, prev.inProgress - 1)
         }));
       } else if (message.status === 'processing') {
+        // 更新进度
+        setTaskProgress(prev => {
+          if (!prev) return message;
+          return {
+            ...prev,
+            ...message,
+            progress: message.progress || prev.progress
+          };
+        });
+        
         setStats(prev => ({
           ...prev,
           inProgress: prev.inProgress + 1
@@ -249,14 +285,14 @@ export default function Home() {
         // 从响应中获取结果数组
         const results = info.file.response.results || [];
         console.log('Raw results:', results);
-        
+
         // 格式化地址数据
         const formattedAddresses = results.map((result: any) => {
           // 从data中提取地址信息
           const fullAddress = result.data?.address || '';
           const [network, address] = fullAddress.includes('/')
             ? fullAddress.split('/')
-            : ['BSC', fullAddress];
+            : [form.getFieldValue('network'), fullAddress];
             
           console.log('Processing address:', {
             fullAddress,
@@ -290,12 +326,22 @@ export default function Home() {
         
         // 更新结果列表和统计信息
         setResults(prev => [...prev, ...formattedAddresses]);
+
+        // 更新总任务数和状态
         setStats(prev => ({
           ...prev,
           total: prev.total + results.length,
           success: prev.success + results.filter((r: any) => r.success).length,
           error: prev.error + results.filter((r: any) => !r.success).length
         }));
+
+        // 更新任务进度
+        setTaskProgress({
+          status: 'processing',
+          progress: 0,
+          current: 0,
+          total: results.length
+        });
       } else if (info.file.status === 'error') {
         console.error('File upload error:', info.file);
         message.error(`${info.file.name} upload failed: ${info.file.error?.message || 'Unknown error'}`);
@@ -560,98 +606,24 @@ export default function Home() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-4"
-                >
-                  <Progress
-                    percent={taskProgress.progress}
-                    status={taskProgress.status === 'error' ? 'exception' : 
-                           taskProgress.status === 'completed' ? 'success' : 'active'}
-                  />
-                  <div className="text-sm text-gray-500 mt-2">
-                    {taskProgress.current && taskProgress.total && 
-                     `Progress: ${taskProgress.current}/${taskProgress.total}`}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {taskProgress && taskProgress.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
                   className="mt-6"
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <motion.div 
-                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
-                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    >
-                      <Statistic
-                        title={<span className="text-gray-600">Total Tasks</span>}
-                        value={stats.total}
-                        prefix={<DashboardOutlined className="text-blue-500" />}
-                      />
-                    </motion.div>
-                    <motion.div 
-                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
-                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    >
-                      <Statistic
-                        title={<span className="text-gray-600">Successful</span>}
-                        value={stats.success}
-                        valueStyle={{ color: '#52c41a' }}
-                        prefix={<CheckCircleOutlined className="text-green-500" />}
-                      />
-                    </motion.div>
-                    <motion.div 
-                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
-                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    >
-                      <Statistic
-                        title={<span className="text-gray-600">Failed</span>}
-                        value={stats.error}
-                        valueStyle={{ color: '#ff4d4f' }}
-                        prefix={<CheckCircleOutlined className="text-red-500" />}
-                      />
-                    </motion.div>
-                    <motion.div 
-                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
-                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    >
-                      <Statistic
-                        title={<span className="text-gray-600">In Progress</span>}
-                        value={stats.inProgress}
-                        prefix={<SyncOutlined spin className="text-blue-500" />}
-                      />
-                    </motion.div>
-                  </div>
+                  <div className="grid grid-cols-1 gap-4 mb-6">
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                      <h4 className="text-gray-600 mb-4">Task Progress</h4>
+                      <div className="mb-4">
+                        <Progress
+                          percent={100}
+                          success={{ percent: stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0 }}
+                          trailColor="#ff4d4f"
+                          showInfo={false}
+                        />
+                        <div className="flex justify-between text-sm mt-2">
+                          <span className="text-green-500">Success: {stats.success} ({stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0}%)</span>
+                          <span className="text-red-500">Failed: {stats.error} ({stats.total > 0 ? Math.round((stats.error / stats.total) * 100) : 0}%)</span>
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                      <h4 className="text-gray-600 mb-4">Success Rate</h4>
-                      <Progress
-                        percent={stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0}
-                        status="success"
-                        strokeColor="#52c41a"
-                      />
-                    </div>
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                      <h4 className="text-gray-600 mb-4">Failure Rate</h4>
-                      <Progress
-                        percent={stats.total > 0 ? Math.round((stats.error / stats.total) * 100) : 0}
-                        status="exception"
-                        strokeColor="#ff4d4f"
-                      />
-                    </div>
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                      <h4 className="text-gray-600 mb-4">Progress</h4>
-                      <Progress
-                        percent={stats.total > 0 ? Math.round((stats.inProgress / stats.total) * 100) : 0}
-                        status="active"
-                        strokeColor="#1890ff"
-                      />
                     </div>
                   </div>
                 </motion.div>
