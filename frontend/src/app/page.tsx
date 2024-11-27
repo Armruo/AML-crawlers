@@ -528,7 +528,8 @@ export default function Home() {
       onFilter: (value: string, record) => record.result?.risk_level === value,
       render: (text: string) => {
         if (!text) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
-        const color = text.toLowerCase().includes('risky') ? 'red' : 'inherit';
+        const color = text.toLowerCase().includes('risky') ? 'red' : 
+                     text.toLowerCase().includes('low') ? 'green' : 'inherit';
         return <span style={{ color }}>{text}</span>;
       }
     },
