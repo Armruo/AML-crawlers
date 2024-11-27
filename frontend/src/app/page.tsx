@@ -180,7 +180,7 @@ export default function Home() {
           'Accept': 'application/json',
         },
         body: JSON.stringify({ 
-          address: values.url,
+          address: values.address,
           network: values.network 
         }),
       });
@@ -425,7 +425,10 @@ export default function Home() {
       title: 'Risk Score',
       dataIndex: ['result', 'risk_score'],
       key: 'risk_score',
-      render: (text: string | number) => text || <span style={{ color: '#bfbfbf' }}>N/A</span>
+      render: (text: string | number) => {
+        if (!text && text !== 0) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
+        return text;
+      }
     },
     {
       title: 'Related Addresses',
@@ -477,143 +480,77 @@ export default function Home() {
         </motion.div>
       </Header>
       
-      <Content className="p-8">
-        <Row gutter={[16, 16]}>
-          <Col span={6}>
-            <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "spring" }}>
-              <Card>
-                <Statistic
-                  title="Total Tasks"
-                  value={stats.total}
-                  prefix={<DashboardOutlined />}
-                />
-              </Card>
-            </motion.div>
-          </Col>
-          <Col span={6}>
-            <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "spring" }}>
-              <Card>
-                <Statistic
-                  title="Successful Tasks"
-                  value={stats.success}
-                  valueStyle={{ color: '#3f8600' }}
-                  prefix={<CheckCircleOutlined />}
-                />
-              </Card>
-            </motion.div>
-          </Col>
-          <Col span={6}>
-            <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "spring" }}>
-              <Card>
-                <Statistic
-                  title="Failed Tasks"
-                  value={stats.error}
-                  valueStyle={{ color: '#cf1322' }}
-                  prefix={<CheckCircleOutlined />}
-                />
-              </Card>
-            </motion.div>
-          </Col>
-          <Col span={6}>
-            <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "spring" }}>
-              <Card>
-                <Statistic
-                  title="Tasks in Progress"
-                  value={stats.inProgress}
-                  prefix={<SyncOutlined spin />}
-                />
-              </Card>
-            </motion.div>
-          </Col>
-        </Row>
-
+      <Content className="p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ duration: 0.5 }}
         >
-          <Card className="mt-4">
-            <Row gutter={[16, 16]}>
-              <Col span={8}>
-                <Card>
-                  <div className="text-center">
-                    <div className="text-lg mb-2">Task Status Distribution</div>
-                    <Progress type="circle" percent={stats.total > 0 ? (stats.success / stats.total) * 100 : 0} />
-                    <div className="mt-4">
-                      <div>Success Rate: {stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(1) : 0}%</div>
-                      <div>Failure Rate: {stats.total > 0 ? ((stats.error / stats.total) * 100).toFixed(1) : 0}%</div>
-                    </div>
-                  </div>
-                </Card>
-              </Col>
-              <Col span={16}>
-                <Card>
-                  <div className="text-lg mb-4">Task Status Overview</div>
-                  <div className="flex justify-around">
-                    <Progress 
-                      type="dashboard"
-                      percent={stats.total > 0 ? (stats.success / stats.total) * 100 : 0}
-                      status="success"
-                      format={() => `${stats.success} Success`}
-                    />
-                    <Progress 
-                      type="dashboard"
-                      percent={stats.total > 0 ? (stats.error / stats.total) * 100 : 0}
-                      status="exception"
-                      format={() => `${stats.error} Failed`}
-                    />
-                    <Progress 
-                      type="dashboard"
-                      percent={stats.total > 0 ? (stats.inProgress / stats.total) * 100 : 0}
-                      status="active"
-                      format={() => `${stats.inProgress} In Progress`}
-                    />
-                  </div>
-                </Card>
-              </Col>
-            </Row>
-          </Card>
-        </motion.div>
+          <Card className="mb-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-medium mb-4">Cryptocurrency Address Crawler</h2>
+              <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                <h3 className="text-lg font-medium mb-3 text-blue-700">Step 1: Select Network</h3>
+                <Form.Item
+                  name="network"
+                  rules={[{ required: true, message: 'Please select a network' }]}
+                  className="mb-0"
+                >
+                  <Select
+                    placeholder="Select blockchain network"
+                    style={{ width: '100%', maxWidth: '300px' }}
+                    options={[
+                      { value: 'BSC', label: 'Binance Smart Chain (BSC)' },
+                      { value: 'ETH', label: 'Ethereum (ETH)' },
+                      { value: 'SOL', label: 'Solana (SOL)' },
+                    ]}
+                    onChange={(value) => {
+                      form.setFieldsValue({ network: value });
+                    }}
+                  />
+                </Form.Item>
+              </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card className="mt-4">
-            <Form form={form} onFinish={onFinish} layout="inline" className="mb-4">
-              <Form.Item
-                name="network"
-                label="Network"
-                rules={[{ required: true, message: 'Please select a network' }]}
-              >
-                <Select style={{ width: 120 }}>
-                  <Select.Option value="ETH">ETH</Select.Option>
-                  <Select.Option value="BSC">BSC</Select.Option>
-                  <Select.Option value="SOL">SOL</Select.Option>
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="Address"
-                name="url"
-                rules={[{ required: true, message: 'Please enter an address' }]}
-              >
-                <Input placeholder="Enter the address to crawl" />
-              </Form.Item>
-              
-              <Form.Item>
-                <Button type="primary" htmlType="submit" loading={loading}>
-                  Start Crawling
-                </Button>
-              </Form.Item>
-            </Form>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-medium mb-3">Option 1: Single Address</h3>
+                  <Form.Item
+                    name="address"
+                    className="mb-3"
+                  >
+                    <Input.Search
+                      placeholder="Enter cryptocurrency address"
+                      enterButton={
+                        <Button 
+                          type="primary"
+                          icon={<DashboardOutlined />}
+                          loading={loading}
+                        >
+                          Start Crawling
+                        </Button>
+                      }
+                      onSearch={onFinish}
+                    />
+                  </Form.Item>
+                </div>
 
-            <div className="mt-4">
-              <Upload {...uploadProps}>
-                <Button icon={<UploadOutlined />}>Upload Batch Task File</Button>
-              </Upload>
-              <div className="text-sm text-gray-500 mt-2">
-                Please upload a CSV file with an "address" column. The file should be encoded in UTF-8 or GBK.
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-medium mb-3">Option 2: Batch Addresses</h3>
+                  <Form.Item name="file" className="mb-3">
+                    <Upload {...uploadProps} className="w-full">
+                      <Button 
+                        icon={<UploadOutlined />} 
+                        style={{ width: '100%' }}
+                        loading={loading}
+                      >
+                        Upload CSV File
+                      </Button>
+                    </Upload>
+                  </Form.Item>
+                  <div className="text-sm text-gray-500">
+                    Supported format: CSV file with addresses in first column
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -633,6 +570,89 @@ export default function Home() {
                   <div className="text-sm text-gray-500 mt-2">
                     {taskProgress.current && taskProgress.total && 
                      `Progress: ${taskProgress.current}/${taskProgress.total}`}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {taskProgress && taskProgress.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-6"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <motion.div 
+                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
+                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    >
+                      <Statistic
+                        title={<span className="text-gray-600">Total Tasks</span>}
+                        value={stats.total}
+                        prefix={<DashboardOutlined className="text-blue-500" />}
+                      />
+                    </motion.div>
+                    <motion.div 
+                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
+                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    >
+                      <Statistic
+                        title={<span className="text-gray-600">Successful</span>}
+                        value={stats.success}
+                        valueStyle={{ color: '#52c41a' }}
+                        prefix={<CheckCircleOutlined className="text-green-500" />}
+                      />
+                    </motion.div>
+                    <motion.div 
+                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
+                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    >
+                      <Statistic
+                        title={<span className="text-gray-600">Failed</span>}
+                        value={stats.error}
+                        valueStyle={{ color: '#ff4d4f' }}
+                        prefix={<CheckCircleOutlined className="text-red-500" />}
+                      />
+                    </motion.div>
+                    <motion.div 
+                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100"
+                      whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    >
+                      <Statistic
+                        title={<span className="text-gray-600">In Progress</span>}
+                        value={stats.inProgress}
+                        prefix={<SyncOutlined spin className="text-blue-500" />}
+                      />
+                    </motion.div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                      <h4 className="text-gray-600 mb-4">Success Rate</h4>
+                      <Progress
+                        percent={stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0}
+                        status="success"
+                        strokeColor="#52c41a"
+                      />
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                      <h4 className="text-gray-600 mb-4">Failure Rate</h4>
+                      <Progress
+                        percent={stats.total > 0 ? Math.round((stats.error / stats.total) * 100) : 0}
+                        status="exception"
+                        strokeColor="#ff4d4f"
+                      />
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                      <h4 className="text-gray-600 mb-4">Progress</h4>
+                      <Progress
+                        percent={stats.total > 0 ? Math.round((stats.inProgress / stats.total) * 100) : 0}
+                        status="active"
+                        strokeColor="#1890ff"
+                      />
+                    </div>
                   </div>
                 </motion.div>
               )}
