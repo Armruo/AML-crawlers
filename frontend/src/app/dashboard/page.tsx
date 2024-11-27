@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Card, Row, Col, Statistic, Table } from 'antd';
+import { Card, Row, Col, Statistic, Table, Button } from 'antd';
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -51,14 +51,29 @@ const DashboardPage = () => {
 
   const columns = [
     {
+      title: '#',
+      key: 'index',
+      width: 60,
+      render: (_: any, __: any, index: number) => index + 1,
+    },
+    {
       title: 'Task',
       dataIndex: 'task',
       key: 'task',
+      sorter: (a, b) => a.task.localeCompare(b.task),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
+      sorter: (a, b) => a.status.localeCompare(b.status),
+      filters: [
+        { text: 'Running', value: 'Running' },
+        { text: 'Completed', value: 'Completed' },
+        { text: 'Failed', value: 'Failed' },
+        { text: 'Pending', value: 'Pending' },
+      ],
+      onFilter: (value: string, record) => record.status === value,
       render: (status: string) => {
         const statusColors: Record<string, string> = {
           Running: '#1890ff',
@@ -77,14 +92,20 @@ const DashboardPage = () => {
       title: 'Progress',
       dataIndex: 'progress',
       key: 'progress',
+      sorter: (a, b) => a.progress - b.progress,
       render: (progress: number) => `${progress}%`,
     },
     {
       title: 'Start Time',
       dataIndex: 'startTime',
       key: 'startTime',
+      sorter: (a, b) => a.startTime.localeCompare(b.startTime),
     },
   ];
+
+  const handleExportTable = () => {
+    // Implement export table logic here
+  };
 
   return (
     <div>
@@ -108,6 +129,15 @@ const DashboardPage = () => {
         style={{ marginTop: 16 }}
         extra={<a href="#">View All</a>}
       >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 0 16px 0' }}>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            onClick={handleExportTable}
+          >
+            Export Table
+          </Button>
+        </div>
         <Table
           columns={columns}
           dataSource={recentTasks}

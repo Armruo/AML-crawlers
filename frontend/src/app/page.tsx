@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Layout, Form, Input, Button, Upload, Table, message, Card, Progress, Statistic, Row, Col, Spin, Select, Tooltip } from 'antd';
-import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined, CopyOutlined } from '@ant-design/icons';
+import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadProps } from 'antd';
 import { log } from 'console';
@@ -355,6 +355,61 @@ export default function Home() {
     },
   };
 
+  const handleExportTable = () => {
+    try {
+      // 准备导出数据
+      const exportData = results.map((item, index) => ({
+        'No.': index + 1,
+        'Address': item.address,
+        'Network': item.network,
+        'Risk Level': item.result?.risk_level || 'N/A',
+        'Risk Type': item.result?.risk_type || 'N/A',
+        'Address/Risk Label': Array.isArray(item.result?.address_labels) 
+          ? item.result.address_labels.join(', ') 
+          : (item.result?.address_labels || 'N/A'),
+        'Volume(USD)/%': item.result?.volume || 'N/A',
+        'Status': item.status === 'error' ? `Error: ${item.error}` : 'Success'
+      }));
+
+      // 创建CSV内容
+      const headers = Object.keys(exportData[0]);
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map(row => 
+          headers.map(header => {
+            const value = row[header];
+            // 如果值包含逗号、引号或换行符，需要用引号包裹并处理引号
+            return /[",\n]/.test(value) 
+              ? `"${value.replace(/"/g, '""')}"` 
+              : value
+          }).join(',')
+        )
+      ].join('\n');
+
+      // 创建Blob对象
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      
+      // 创建下载链接
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `misttrack_address_results_${new Date().toISOString().slice(0,19).replace(/[:-]/g, '')}.csv`);
+      document.body.appendChild(link);
+      
+      // 触发下载
+      link.click();
+      
+      // 清理
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      message.success('Table exported successfully');
+    } catch (error) {
+      console.error('Export error:', error);
+      message.error('Failed to export table');
+    }
+  };
+
   const columns = [
     {
       title: '#',
@@ -368,6 +423,7 @@ export default function Home() {
       key: 'address',
       fixed: 'left',
       width: 400,
+      sorter: (a, b) => a.address.localeCompare(b.address),
       render: (text: string, record: CrawlerResult) => {
         console.log('Rendering address column:', { text, record });
         
@@ -446,13 +502,30 @@ export default function Home() {
       title: 'Network',
       dataIndex: 'network',
       key: 'network',
-      width: 100,
+      width: 120,
+      sorter: (a, b) => a.network.localeCompare(b.network),
+      filters: [
+        { text: 'BSC', value: 'BSC' },
+        { text: 'ETH', value: 'ETH' },
+        { text: 'SOL', value: 'SOL' },
+      ],
+      onFilter: (value: string, record) => record.network === value,
       render: (text: string) => text || <span style={{ color: '#d9d9d9' }}>N/A</span>
     },
     {
       title: 'Risk Level',
       dataIndex: ['result', 'risk_level'],
       key: 'risk_level',
+      sorter: (a, b) => {
+        const levelA = a.result?.risk_level || '';
+        const levelB = b.result?.risk_level || '';
+        return levelA.localeCompare(levelB);
+      },
+      filters: [
+        { text: 'Risky', value: 'Risky' },
+        { text: 'Low', value: 'Low' },
+      ],
+      onFilter: (value: string, record) => record.result?.risk_level === value,
       render: (text: string) => {
         if (!text) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
         const color = text.toLowerCase().includes('risky') ? 'red' : 'inherit';
@@ -463,6 +536,11 @@ export default function Home() {
       title: 'Risk Type',
       dataIndex: ['result', 'risk_type'],
       key: 'risk_type',
+      sorter: (a, b) => {
+        const typeA = a.result?.risk_type || '';
+        const typeB = b.result?.risk_type || '';
+        return typeA.localeCompare(typeB);
+      },
       render: (text: string) => text || <span style={{ color: '#d9d9d9' }}>N/A</span>
     },
     {
@@ -478,33 +556,22 @@ export default function Home() {
       title: 'Volume(USD)/%',
       dataIndex: ['result', 'volume'],
       key: 'volume',
+      sorter: (a, b) => {
+        const volA = parseFloat(a.result?.volume?.replace(/[^0-9.-]+/g, '') || '0');
+        const volB = parseFloat(b.result?.volume?.replace(/[^0-9.-]+/g, '') || '0');
+        return volA - volB;
+      },
       render: (text: string) => text || <span style={{ color: '#d9d9d9' }}>N/A</span>
     },
-    /* Risk Score column (commented out as requested)
-    {
-      title: 'Risk Score',
-      dataIndex: ['result', 'risk_score'],
-      key: 'risk_score',
-      render: (text: string | number) => {
-        if (!text && text !== 0) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
-        return text;
-      }
-    },
-    */
-    /* Related Addresses column (commented out as requested)
-    {
-      title: 'Related Addresses',
-      dataIndex: ['result', 'related_addresses'],
-      key: 'related_addresses',
-      render: (addresses: string[]) => {
-        if (!addresses || addresses.length === 0) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
-        return addresses.join(', ');
-      }
-    },
-    */
     {
       title: 'Status',
       key: 'status',
+      sorter: (a, b) => a.status.localeCompare(b.status),
+      filters: [
+        { text: 'Success', value: 'success' },
+        { text: 'Error', value: 'error' },
+      ],
+      onFilter: (value: string, record) => record.status === value,
       render: (_: any, record: CrawlerResult) => {
         if (record.status === 'error') {
           return <span style={{ color: 'red' }}>Error: {record.error}</span>;
@@ -648,7 +715,9 @@ export default function Home() {
             </AnimatePresence>
 
             <div className="mt-6">
-              <h3 className="text-lg font-medium mb-4">Crawling Results</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Crawling Results</h3>
+              </div>
               <Table 
                 dataSource={results}
                 columns={columns}
@@ -661,6 +730,19 @@ export default function Home() {
                   boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                 }}
                 rowClassName={(record) => record.status === 'error' ? 'error-row' : ''}
+                title={() => (
+                  results.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-16px' }}>
+                      <Button 
+                        type="primary"
+                        icon={<DownloadOutlined />}
+                        onClick={handleExportTable}
+                      >
+                        Export Table
+                      </Button>
+                    </div>
+                  )
+                )}
               />
               {results.length > 0 && (
                 <div className="mt-4 bg-gray-50 p-4 rounded">
