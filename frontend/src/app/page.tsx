@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Layout, Form, Input, Button, Upload, Table, message, Card, Progress, Statistic, Row, Col, Spin, Select } from 'antd';
+import { Layout, Form, Input, Button, Upload, Table, message, Card, Progress, Statistic, Row, Col, Spin, Select, Tooltip } from 'antd';
 import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadProps } from 'antd';
@@ -12,18 +12,51 @@ const { Header, Content } = Layout;
 
 interface TaskProgress {
   status: 'processing' | 'completed' | 'error';
-  progress: number;
   address?: string;
-  result?: any;
+  data?: {
+    address: string;
+    result?: {
+      address?: string;
+      input_address?: string;
+      network?: string;
+      risk_score?: string | number;
+      risk_level?: string;
+      risk_type?: string;
+      address_labels?: string[];
+      volume?: string;
+      labels?: string[];
+      transactions?: any[];
+      related_addresses?: string[];
+    }
+  };
   error?: string;
   current?: number;
   total?: number;
 }
 
+interface CrawlerResult {
+  key: string;
+  address: string;
+  network: string;
+  status: 'success' | 'error';
+  result?: {
+    address: string;
+    risk_score?: string | number;
+    risk_level?: string;
+    risk_type?: string;
+    address_labels?: string[];
+    volume?: string;
+    labels?: string[];
+    transactions?: any[];
+    related_addresses?: string[];
+  };
+  error?: string;
+}
+
 export default function Home() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<CrawlerResult[]>([]);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [stats, setStats] = useState({
     total: 0,
@@ -41,33 +74,81 @@ export default function Home() {
       const message = data.message as TaskProgress;
       setTaskProgress(message);
       
-      if (message.status === 'completed' && message.result) {
-        setResults(prev => [...prev, {
-          address: message.address,
-          network: message.result.network || message.result.address?.split('/')[0],
+      console.log('Raw WebSocket message:', data);
+      
+      if (message.status === 'completed' && message.data) {
+        // Extract address and result
+        const inputAddress = message.data.address || '';
+        const [network, cleanAddress] = inputAddress.includes('/')
+          ? inputAddress.split('/')
+          : ['BSC', inputAddress];
+          
+        // Get the final address from all possible sources
+        const address = cleanAddress || 
+                       message.data.result?.address ||
+                       message.data.result?.input_address ||
+                       message.address;
+
+        if (!address) {
+          console.error('No address found in message:', message);
+          return;
+        }
+
+        console.log('Processing completed message:', {
+          inputAddress,
+          network,
+          address,
+          result: message.data.result
+        });
+
+        const newResult: CrawlerResult = {
+          key: address,
+          address: address,
+          network: network,
           status: 'success',
           result: {
-            risk_score: message.result.risk_score,
-            risk_level: message.result.risk_level,
-            risk_type: message.result.risk_type,
-            address_labels: message.result.address_labels ? [message.result.address_labels] : [],
-            volume: message.result.volume,
-            labels: message.result.labels || [],
-            transactions: message.result.transactions || [],
-            related_addresses: message.result.related_addresses || []
+            address: address,
+            ...message.data.result,
           }
-        }]);
+        };
+
+        console.log('Adding new result:', newResult);
+        setResults(prev => [...prev, newResult]);
+        
         setStats(prev => ({
           ...prev,
           success: prev.success + 1,
           inProgress: Math.max(0, prev.inProgress - 1)
         }));
       } else if (message.status === 'error') {
-        setResults(prev => [...prev, {
-          address: message.address,
+        const inputAddress = message.data?.address || '';
+        const [network, address] = inputAddress.includes('/')
+          ? inputAddress.split('/')
+          : ['BSC', inputAddress];
+
+        if (!address) {
+          console.error('No address found in error message:', message);
+          return;
+        }
+
+        console.log('Processing error message:', {
+          inputAddress,
+          network,
+          address,
+          error: message.data?.error
+        });
+
+        const newResult: CrawlerResult = {
+          key: address,
+          address: address,
+          network: network,
           status: 'error',
-          error: message.error
-        }]);
+          error: message.data?.error || 'Unknown error'
+        };
+
+        console.log('Adding error result:', newResult);
+        setResults(prev => [...prev, newResult]);
+        
         setStats(prev => ({
           ...prev,
           error: prev.error + 1,
@@ -157,33 +238,62 @@ export default function Home() {
       return true;
     },
     onChange(info) {
+      console.log('File upload info:', info);
       if (info.file.status === 'uploading') {
         message.loading('Uploading file...');
       } else if (info.file.status === 'done') {
         console.log('Upload response:', info.file.response);
         message.success(`${info.file.name} uploaded successfully`);
-        const addresses = info.file.response.results || [];
-        const formattedAddresses = addresses.map((addr: any) => ({
-          address: addr.address,
-          network: addr.network || form.getFieldValue('network'),
-          status: addr.status,
-          result: {
-            risk_score: addr.data?.risk_score,
-            risk_level: addr.data?.risk_level,
-            risk_type: addr.data?.risk_type,
-            address_labels: addr.data?.address_labels ? [addr.data.address_labels] : [],
-            volume: addr.data?.volume,
-            labels: addr.data?.labels || [],
-            transactions: addr.data?.transactions || [],
-            related_addresses: addr.data?.related_addresses || []
-          }
-        }));
+        
+        // 从响应中获取结果数组
+        const results = info.file.response.results || [];
+        console.log('Raw results:', results);
+        
+        // 格式化地址数据
+        const formattedAddresses = results.map((result: any) => {
+          // 从data中提取地址信息
+          const fullAddress = result.data?.address || '';
+          const [network, address] = fullAddress.includes('/')
+            ? fullAddress.split('/')
+            : ['BSC', fullAddress];
+            
+          console.log('Processing address:', {
+            fullAddress,
+            network,
+            address,
+            result
+          });
+
+          return {
+            key: address,
+            address: address,  // 只使用地址部分，不包含网络前缀
+            network: network,
+            status: result.success ? 'success' : 'error',
+            result: {
+              address: address,
+              risk_score: result.data?.risk_score,
+              risk_level: result.data?.risk_level,
+              risk_type: result.data?.risk_type,
+              address_labels: typeof result.data?.address_labels === 'string' 
+                ? [result.data.address_labels] 
+                : result.data?.address_labels || [],
+              volume: result.data?.volume,
+              labels: result.data?.labels || [],
+              transactions: result.data?.transactions || [],
+              related_addresses: result.data?.related_addresses || []
+            }
+          };
+        });
+
+        console.log('Formatted addresses:', formattedAddresses);
+        
+        // 更新结果列表和统计信息
         setResults(prev => [...prev, ...formattedAddresses]);
         setStats(prev => ({
           ...prev,
-          total: prev.total + addresses.length,
-          success: prev.success + addresses.filter((a: any) => a.status === 'success').length,
-          error: prev.error + addresses.filter((a: any) => a.status === 'error').length
+          total: prev.total + results.length,
+          success: prev.success + results.filter((r: any) => r.success).length,
+          error: prev.error + results.filter((r: any) => !r.success).length
         }));
       } else if (info.file.status === 'error') {
         console.error('File upload error:', info.file);
@@ -197,11 +307,35 @@ export default function Home() {
       title: 'Address',
       dataIndex: 'address',
       key: 'address',
-      render: (text: string, record: any) => {
-        if (record.status === 'error') {
-          return <span style={{ color: 'red' }}>{text}</span>;
+      fixed: 'left',
+      width: 400,
+      render: (text: string, record: CrawlerResult) => {
+        console.log('Rendering address column:', { text, record });
+        
+        if (!record.address) {
+          console.warn('No address found for record:', record);
+          return 'N/A';
         }
-        return text;
+        
+        if (record.status === 'error') {
+          return <span style={{ color: 'red' }}>{record.address}</span>;
+        }
+        
+        return (
+          <Tooltip title={record.address}>
+            <span style={{ 
+              cursor: 'pointer',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+              fontFamily: 'monospace',
+              maxWidth: '380px'
+            }}>
+              {record.address}
+            </span>
+          </Tooltip>
+        );
       }
     },
     {
@@ -238,9 +372,36 @@ export default function Home() {
       render: (text: string) => text || 'N/A'
     },
     {
+      title: 'Address Labels',
+      dataIndex: ['result', 'address_labels'],
+      key: 'address_labels',
+      render: (labels: string[]) => {
+        if (!labels || labels.length === 0) return 'N/A';
+        return labels.join(', ');
+      }
+    },
+    {
+      title: 'Labels',
+      dataIndex: ['result', 'labels'],
+      key: 'labels',
+      render: (labels: string[]) => {
+        if (!labels || labels.length === 0) return 'N/A';
+        return labels.join(', ');
+      }
+    },
+    {
+      title: 'Related Addresses',
+      dataIndex: ['result', 'related_addresses'],
+      key: 'related_addresses',
+      render: (addresses: string[]) => {
+        if (!addresses || addresses.length === 0) return 'N/A';
+        return addresses.slice(0, 3).join(', ') + (addresses.length > 3 ? '...' : '');
+      }
+    },
+    {
       title: 'Status',
       key: 'status',
-      render: (_: any, record: any) => {
+      render: (_: any, record: CrawlerResult) => {
         if (record.status === 'error') {
           return <span style={{ color: 'red' }}>Error: {record.error}</span>;
         }
@@ -255,9 +416,9 @@ export default function Home() {
         <motion.h1
           className="text-3xl font-bold mb-8"
           style={{
-            color: '#ffffff',  // 白色文字
-            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',  // 添加文字阴影
-            background: 'linear-gradient(45deg, #1a1a1a, #2d2d2d)',  // 深色渐变背景
+            color: '#ffffff',  
+            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',  
+            background: 'linear-gradient(45deg, #1a1a1a, #2d2d2d)',  
             padding: '0.5rem 1rem',
             borderRadius: '8px',
             display: 'inline-block'
@@ -444,9 +605,10 @@ export default function Home() {
               <Table 
                 columns={columns} 
                 dataSource={results}
-                rowKey="address"
+                rowKey="key"
                 pagination={{ pageSize: 10 }}
                 className="shadow-sm"
+                scroll={{ x: true }}  
               />
               {results.length > 0 && (
                 <div className="mt-4 bg-gray-50 p-4 rounded">
