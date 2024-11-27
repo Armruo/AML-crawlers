@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadProps } from 'antd';
 import { log } from 'console';
 import { logger } from '../utils/logger';
+import './table.css';
 
 const { Header, Content } = Layout;
 
@@ -346,7 +347,7 @@ export default function Home() {
         
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
-            <Tooltip title={record.address}>
+            <Tooltip title={record.address} overlayStyle={{ maxWidth: '500px' }}>
               <span 
                 id={`address-${record.address}`}
                 style={{ 
@@ -356,7 +357,10 @@ export default function Home() {
                   whiteSpace: 'nowrap',
                   display: 'block',
                   fontFamily: 'monospace',
-                  maxWidth: '340px'
+                  maxWidth: '340px',
+                  color: '#1f1f1f',
+                  fontSize: '13px',
+                  letterSpacing: '0.5px'
                 }}
               >
                 {record.address}
@@ -367,7 +371,14 @@ export default function Home() {
               icon={<CopyOutlined style={{ color: '#8c8c8c' }} />}
               size="small"
               onClick={handleCopy}
-              style={{ padding: '0 4px' }}
+              style={{ 
+                padding: '0 4px',
+                height: '24px',
+                width: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             />
           </div>
         );
@@ -384,7 +395,7 @@ export default function Home() {
       dataIndex: ['result', 'risk_level'],
       key: 'risk_level',
       render: (text: string) => {
-        if (!text) return 'N/A';
+        if (!text) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
         const color = text.toLowerCase().includes('risky') ? 'red' : 'inherit';
         return <span style={{ color }}>{text}</span>;
       }
@@ -393,14 +404,14 @@ export default function Home() {
       title: 'Risk Type',
       dataIndex: ['result', 'risk_type'],
       key: 'risk_type',
-      render: (text: string) => text || 'N/A'
+      render: (text: string) => text || <span style={{ color: '#bfbfbf' }}>N/A</span>
     },
     {
       title: 'Address/Risk Label',
       dataIndex: ['result', 'address_labels'],
       key: 'address_labels',
       render: (labels: string[]) => {
-        if (!labels || labels.length === 0) return 'N/A';
+        if (!labels || labels.length === 0) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
         return Array.isArray(labels) ? labels.join(', ') : labels;
       }
     },
@@ -408,20 +419,20 @@ export default function Home() {
       title: 'Volume(USD)/%',
       dataIndex: ['result', 'volume'],
       key: 'volume',
-      render: (text: string) => text || 'N/A'
+      render: (text: string) => text || <span style={{ color: '#bfbfbf' }}>N/A</span>
     },
     {
       title: 'Risk Score',
       dataIndex: ['result', 'risk_score'],
       key: 'risk_score',
-      render: (text: string | number) => text || 'N/A'
+      render: (text: string | number) => text || <span style={{ color: '#bfbfbf' }}>N/A</span>
     },
     {
       title: 'Related Addresses',
       dataIndex: ['result', 'related_addresses'],
       key: 'related_addresses',
       render: (addresses: string[]) => {
-        if (!addresses || addresses.length === 0) return 'N/A';
+        if (!addresses || addresses.length === 0) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
         return addresses.join(', ');
       }
     },
@@ -630,12 +641,17 @@ export default function Home() {
             <div className="mt-6">
               <h3 className="text-lg font-medium mb-4">Crawling Results</h3>
               <Table 
-                columns={columns} 
                 dataSource={results}
-                rowKey="key"
-                pagination={{ pageSize: 10 }}
-                className="shadow-sm"
-                scroll={{ x: true }}  
+                columns={columns}
+                pagination={false}
+                scroll={{ x: 1500 }}
+                className="modern-table"
+                style={{
+                  background: '#fff',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                }}
+                rowClassName={(record) => record.status === 'error' ? 'error-row' : ''}
               />
               {results.length > 0 && (
                 <div className="mt-4 bg-gray-50 p-4 rounded">

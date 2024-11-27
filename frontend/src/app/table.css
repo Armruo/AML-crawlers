@@ -1,0 +1,52 @@
+.modern-table .ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.modern-table .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #1f1f1f;
+  padding: 16px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.modern-table .ant-table-tbody > tr > td {
+  padding: 16px;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.modern-table .ant-table-tbody > tr:hover > td {
+  background: #fafafa;
+}
+
+.modern-table .error-row {
+  background-color: #fff2f0;
+}
+
+.modern-table .error-row:hover > td {
+  background-color: #fff2f0 !important;
+}
+
+.modern-table .ant-table-tbody > tr > td {
+  transition: background 0.2s;
+}
+
+.modern-table .ant-btn {
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modern-table .ant-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.modern-table .ant-tooltip {
+  font-size: 13px;
+}
+
+.modern-table span[style*="monospace"] {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
