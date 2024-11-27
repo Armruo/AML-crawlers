@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Layout, Form, Input, Button, Upload, Table, message, Card, Progress, Statistic, Row, Col, Spin, Select, Tooltip } from 'antd';
-import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined } from '@ant-design/icons';
+import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined, CopyOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadProps } from 'antd';
 import { log } from 'console';
@@ -321,20 +321,55 @@ export default function Home() {
           return <span style={{ color: 'red' }}>{record.address}</span>;
         }
         
+        const handleCopy = () => {
+          const rect = document.getElementById(`address-${record.address}`)?.getBoundingClientRect();
+          navigator.clipboard.writeText(record.address)
+            .then(() => {
+              if (rect) {
+                message.success({
+                  content: 'copied',
+                  duration: 1,
+                  className: 'custom-message',
+                  style: {
+                    marginTop: '0px',
+                    position: 'absolute',
+                    left: `${rect.right + 30}px`,
+                    top: `${rect.top}px`,
+                  }
+                });
+              }
+            })
+            .catch(() => {
+              message.error('Failed to copy');
+            });
+        };
+        
         return (
-          <Tooltip title={record.address}>
-            <span style={{ 
-              cursor: 'pointer',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              display: 'block',
-              fontFamily: 'monospace',
-              maxWidth: '380px'
-            }}>
-              {record.address}
-            </span>
-          </Tooltip>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+            <Tooltip title={record.address}>
+              <span 
+                id={`address-${record.address}`}
+                style={{ 
+                  cursor: 'pointer',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'block',
+                  fontFamily: 'monospace',
+                  maxWidth: '340px'
+                }}
+              >
+                {record.address}
+              </span>
+            </Tooltip>
+            <Button
+              type="text"
+              icon={<CopyOutlined style={{ color: '#8c8c8c' }} />}
+              size="small"
+              onClick={handleCopy}
+              style={{ padding: '0 4px' }}
+            />
+          </div>
         );
       }
     },
@@ -342,6 +377,7 @@ export default function Home() {
       title: 'Network',
       dataIndex: 'network',
       key: 'network',
+      width: 100
     },
     {
       title: 'Risk Level',
@@ -354,40 +390,31 @@ export default function Home() {
       }
     },
     {
-      title: 'Risk Score',
-      dataIndex: ['result', 'risk_score'],
-      key: 'risk_score',
-      render: (text: string) => text || 'N/A'
-    },
-    {
       title: 'Risk Type',
       dataIndex: ['result', 'risk_type'],
       key: 'risk_type',
       render: (text: string) => text || 'N/A'
     },
     {
-      title: 'Volume',
+      title: 'Address/Risk Label',
+      dataIndex: ['result', 'address_labels'],
+      key: 'address_labels',
+      render: (labels: string[]) => {
+        if (!labels || labels.length === 0) return 'N/A';
+        return Array.isArray(labels) ? labels.join(', ') : labels;
+      }
+    },
+    {
+      title: 'Volume(USD)/%',
       dataIndex: ['result', 'volume'],
       key: 'volume',
       render: (text: string) => text || 'N/A'
     },
     {
-      title: 'Address Labels',
-      dataIndex: ['result', 'address_labels'],
-      key: 'address_labels',
-      render: (labels: string[]) => {
-        if (!labels || labels.length === 0) return 'N/A';
-        return labels.join(', ');
-      }
-    },
-    {
-      title: 'Labels',
-      dataIndex: ['result', 'labels'],
-      key: 'labels',
-      render: (labels: string[]) => {
-        if (!labels || labels.length === 0) return 'N/A';
-        return labels.join(', ');
-      }
+      title: 'Risk Score',
+      dataIndex: ['result', 'risk_score'],
+      key: 'risk_score',
+      render: (text: string | number) => text || 'N/A'
     },
     {
       title: 'Related Addresses',
@@ -395,7 +422,7 @@ export default function Home() {
       key: 'related_addresses',
       render: (addresses: string[]) => {
         if (!addresses || addresses.length === 0) return 'N/A';
-        return addresses.slice(0, 3).join(', ') + (addresses.length > 3 ? '...' : '');
+        return addresses.join(', ');
       }
     },
     {
