@@ -583,32 +583,34 @@ export default function Home() {
   ];
 
   return (
-    <Layout className="min-h-screen">
-      <Header className="flex items-center justify-between">
-        <motion.h1
-          className="text-3xl font-bold mb-8"
-          style={{
-            color: '#ffffff',  
-            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',  
-            background: 'linear-gradient(45deg, #1a1a1a, #2d2d2d)',  
+    <Layout>
+      <Header className="ant-layout-header flex items-center justify-between" style={{ 
+        padding: '0 24px',
+        height: 'auto',
+        minHeight: '64px',
+        position: 'relative',
+        zIndex: 1
+      }}>
+        <div className="flex items-center justify-between w-full">
+          <h1 className="text-2xl font-bold m-0" style={{
+            color: '#ffffff',
+            textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+            padding: '0.5rem 1rem',
+            whiteSpace: 'nowrap',
+            overflow: 'visible'
+          }}>
+            Misttrack Crawler Dashboard
+          </h1>
+          {/* <div className="text-white flex items-center" style={{
+            background: 'rgba(255,255,255,0.1)',
             padding: '0.5rem 1rem',
             borderRadius: '8px',
-            display: 'inline-block'
-          }}
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          Misttrack Crawler Dashboard
-        </motion.h1>
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="text-white"
-        >
-          <DashboardOutlined className="mr-2" />
-          Task Monitor
-        </motion.div>
+            backdropFilter: 'blur(5px)'
+          }}>
+            <DashboardOutlined className="mr-2" />
+            Task Monitor
+          </div> */}
+        </div>
       </Header>
       
       <Content className="p-6">
