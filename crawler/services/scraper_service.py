@@ -1,12 +1,11 @@
 import logging
-import cloudscraper
 import asyncio
-import aiohttp
+import concurrent.futures
+from typing import Dict, Any, List, Optional
 from bs4 import BeautifulSoup
-from typing import Dict, Any, Optional
-from ..validators import CryptoAddressValidator
 from ..scraper_undetected import UndetectedScraper
-import json
+from ..cache_manager import CacheManager
+from ..validators import CryptoAddressValidator
 
 logger = logging.getLogger(__name__)
 
@@ -16,18 +15,67 @@ class MistTrackScraperService:
         self.network = network if network and network.lower() != 'undefined' else 'ETH'
         self.base_url = f"https://misttrack.io/aml_risks/{self.network}/{self.address}"
         self.validator = CryptoAddressValidator()
-        self.scraper = UndetectedScraper()
+        self.scraper = None  # 延迟初始化
+        self.cache_manager = CacheManager()
+
+    def _get_scraper(self):
+        """延迟初始化爬虫实例"""
+        if self.scraper is None:
+            self.scraper = UndetectedScraper()
+        return self.scraper
+
+    @classmethod
+    async def process_addresses(cls, addresses: List[str], network: str = 'ETH') -> List[Dict[str, Any]]:
+        """并发处理多个地址"""
+        tasks = []
+        for address in addresses:
+            service = cls(address=address, network=network)
+            tasks.append(service.get_address_info())
+        
+        return await asyncio.gather(*tasks)
+
+    async def get_address_info(self) -> Dict[str, Any]:
+        """获取地址信息"""
+        logger.info(f"Getting info for address {self.address} on network {self.network}")
+        
+        # 验证地址格式
+        valid, message, _ = self.validator.validate(self.address)
+        if not valid:
+            logger.error(f"Invalid address format: {self.address}")
+            return {"success": False, "error": message}
+
+        try:
+            # 检查缓存
+            cached_result = self.cache_manager.get_cached_result(self.address, self.network)
+            if cached_result:
+                logger.info(f"Cache hit for {self.address} on {self.network}")
+                logger.info(f"Using cached result for {self.address}")
+                return {"success": True, "data": cached_result}
+
+            # 如果没有缓存，爬取数据
+            logger.info(f"Making request for address {self.address}")
+            result = await self._make_request(self.base_url)
+            
+            # 缓存结果
+            if result["success"]:
+                self.cache_manager.cache_result(self.address, self.network, result["data"])
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting address info: {str(e)}")
+            return {"success": False, "error": str(e)}
 
     async def _make_request(self, url: str) -> Dict[str, Any]:
-        """Make HTTP request using UndetectedScraper"""
+        """使用线程池执行同步的爬虫操作"""
         try:
-            # 在事件循环的默认线程池中运行同步的scraper
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                self.scraper.search_address,
-                f"{self.network}/{self.address}"
-            )
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    self._get_scraper().search_address,  # 使用延迟初始化的爬虫
+                    f"{self.network}/{self.address}"
+                )
             
             if "error" in result:
                 return {"success": False, "error": result["error"]}
@@ -36,42 +84,6 @@ class MistTrackScraperService:
             
         except Exception as e:
             logger.error(f"Error making request: {str(e)}")
-            return {"success": False, "error": str(e)}
-
-    async def get_address_info(self) -> Dict[str, Any]:
-        """Get information about a crypto address"""
-        logger.info(f"Getting info for address {self.address} on network {self.network}")
-        
-        valid, message, _ = self.validator.validate(self.address)
-        if not valid:
-            logger.error(f"Invalid address format: {self.address}")
-            return {"success": False, "error": message}
-
-        try:
-            logger.info(f"Making request for address {self.address}")
-            response = await self._make_request(self.base_url)
-            
-            if not response["success"]:
-                logger.error(f"Request failed: {response['error']}")
-                return response
-            
-            # 直接返回从UndetectedScraper获取的数据
-            result_data = response["data"]
-            logger.info(f"Successfully retrieved data: {result_data}")
-            
-            # 确保所有列表字段都是列表类型
-            if isinstance(result_data, dict):
-                for key in ["labels", "transactions", "related_addresses"]:
-                    if key in result_data and not isinstance(result_data[key], list):
-                        result_data[key] = list(result_data[key]) if result_data[key] else []
-            
-            return {
-                "success": True,
-                "data": result_data
-            }
-            
-        except Exception as e:
-            logger.error(f"Error fetching address info: {str(e)}")
             return {"success": False, "error": str(e)}
 
     def _extract_risk_score(self, soup: BeautifulSoup) -> Optional[int]:

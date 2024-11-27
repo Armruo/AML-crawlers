@@ -5,13 +5,59 @@ from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
 
 logger = logging.getLogger(__name__)
+
+class BrowserPool:
+    def __init__(self, max_browsers=3):
+        self.browsers = []
+        self.max_browsers = max_browsers
+
+    def get_browser(self):
+        try:
+            if not self.browsers:
+                options = uc.ChromeOptions()
+                options.add_argument('--headless')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--window-size=1920,1080')
+                options.add_argument('--disable-gpu')
+                options.add_argument('--disable-extensions')
+                options.page_load_strategy = 'eager'  # 不等待所有资源加载完成
+                browser = uc.Chrome(options=options)
+                browser.set_page_load_timeout(30)  # 页面加载超时时间
+                browser.implicitly_wait(5)  # 减少隐式等待时间
+                self.browsers.append(browser)
+            return self.browsers.pop(0)
+        except Exception as e:
+            logger.error(f"Error creating browser: {str(e)}")
+            raise
+
+    def return_browser(self, browser):
+        """安全地返回浏览器到池中"""
+        try:
+            if browser and len(self.browsers) < self.max_browsers:
+                self.browsers.append(browser)
+            else:
+                self.quit_browser(browser)
+        except Exception as e:
+            logger.error(f"Error returning browser to pool: {str(e)}")
+            self.quit_browser(browser)
+
+    def quit_browser(self, browser):
+        """安全地关闭浏览器"""
+        try:
+            if browser:
+                browser.quit()
+        except Exception as e:
+            logger.error(f"Error quitting browser: {str(e)}")
 
 class UndetectedScraper:
     def __init__(self):
         self.base_url = "https://misttrack.io/aml_risks"
-        self.setup_driver()
+        self.browser_pool = BrowserPool(max_browsers=3)
+        self.driver = None
 
     def setup_driver(self):
         """设置Undetected ChromeDriver"""
@@ -22,35 +68,67 @@ class UndetectedScraper:
         options.add_argument('--window-size=1920,1080')
         
         self.driver = uc.Chrome(options=options)
-        self.driver.implicitly_wait(10)
+        self.driver.set_page_load_timeout(30)  # 页面加载超时时间
+        self.driver.implicitly_wait(5)  # 减少隐式等待时间
 
     def search_address(self, address):
         """使用Undetected ChromeDriver搜索地址"""
+        browser_acquired = False
         try:
+            # 从池中获取浏览器
+            self.driver = self.browser_pool.get_browser()
+            browser_acquired = True
+            
             url = f"{self.base_url}/{address}"
             logger.info(f"Searching address: {url}")
             
+            # 设置页面加载超时
+            self.driver.set_page_load_timeout(30)
             self.driver.get(url)
             
-            # 等待页面加载完成
-            WebDriverWait(self.driver, 30).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
-            )
+            # 等待页面主体加载
+            try:
+                WebDriverWait(self.driver, 20).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+            except TimeoutException:
+                logger.warning("Timeout waiting for body to load, continuing anyway")
             
             # 等待loading消失
             try:
-                WebDriverWait(self.driver, 30).until_not(
+                WebDriverWait(self.driver, 15).until_not(
                     EC.presence_of_element_located((By.CSS_SELECTOR, ".el-loading-mask"))
                 )
-            except Exception as e:
-                logger.warning(f"Timeout waiting for loading to complete: {str(e)}")
+            except TimeoutException:
+                logger.warning("Loading mask didn't disappear, continuing anyway")
             
-            # 等待一段时间让JavaScript执行完成
-            time.sleep(5)
+            # 等待数据加载
+            try:
+                WebDriverWait(self.driver, 15).until(
+                    lambda driver: driver.execute_script(
+                        "return !!(window.__NUXT__?.state?.address?.addressInfo || window.__NUXT__?.state?.address)"
+                    )
+                )
+            except TimeoutException:
+                logger.warning("Timeout waiting for data, continuing with available data")
             
-            # 滚动页面以触发懒加载
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
+            # 滚动页面以触发懒加载，并等待内容更新
+            self.driver.execute_script("""
+                window.scrollTo(0, document.body.scrollHeight);
+                return new Promise((resolve) => {
+                    const observer = new MutationObserver((mutations, obs) => {
+                        obs.disconnect();
+                        resolve();
+                    });
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        characterData: true
+                    });
+                    setTimeout(resolve, 1000);  // 最多等待1秒
+                });
+            """)
             
             # 获取页面内容
             page_source = self.driver.page_source
@@ -58,26 +136,16 @@ class UndetectedScraper:
             
             # 尝试从JavaScript状态中获取数据
             try:
-                # 尝试多个可能的JavaScript状态路径
-                js_paths = [
-                    "return window.__NUXT__.state.address.addressInfo",
-                    "return window.__NUXT__.state.address",
-                    "return window.__NUXT__.state",
-                    "return window.__INITIAL_STATE__",
-                ]
-                
-                risk_data = None
-                for js_path in js_paths:
-                    try:
-                        risk_data = self.driver.execute_script(js_path)
-                        if risk_data:
-                            logger.info(f"Successfully extracted risk data from {js_path}")
-                            break
-                    except Exception as e:
-                        logger.debug(f"Failed to extract from {js_path}: {str(e)}")
-                
+                risk_data = self.driver.execute_script("""
+                    return (
+                        window.__NUXT__?.state?.address?.addressInfo ||
+                        window.__NUXT__?.state?.address ||
+                        window.__NUXT__?.state ||
+                        window.__INITIAL_STATE__
+                    );
+                """)
                 if risk_data:
-                    logger.info(f"Risk data from JavaScript: {risk_data}")
+                    logger.info("Successfully extracted risk data")
             except Exception as e:
                 logger.error(f"Error extracting risk data from JavaScript: {str(e)}")
                 risk_data = None
@@ -112,6 +180,14 @@ class UndetectedScraper:
         except Exception as e:
             logger.error(f"Error searching address {address}: {str(e)}")
             return {"error": str(e)}
+        finally:
+            # 只有在实际获取了浏览器的情况下才尝试返回
+            if browser_acquired and self.driver:
+                try:
+                    self.browser_pool.return_browser(self.driver)
+                except Exception as e:
+                    logger.error(f"Error returning browser to pool: {str(e)}")
+                self.driver = None
 
     def _extract_risk_score(self, soup):
         """提取风险分数"""
@@ -213,7 +289,7 @@ class UndetectedScraper:
                 for row in rows:
                     cells = row.find_all('td')
                     if len(cells) >= 1:
-                        risk_type_text = cells[0].text.strip()
+                        risk_type_text = cells[0].get_text(strip=True)
                         if risk_type_text and risk_type_text.lower() != 'risk type':
                             return risk_type_text
             

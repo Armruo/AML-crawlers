@@ -133,50 +133,41 @@ class CrawlerViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Clean the addresses (remove any whitespace and empty rows)
+            # Clean the addresses
             addresses = df['address'].astype(str).str.strip().dropna().tolist()
-
-            # Process addresses
-            results = []
             total_addresses = len(addresses)
+
+            if not addresses:
+                return Response(
+                    {"error": "No valid addresses found in file"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Process addresses in batches
+            batch_size = 5  # 每批处理5个地址
+            results = []
             
-            for idx, address in enumerate(addresses, 1):
-                try:
-                    # Send progress update
-                    self._send_ws_notification(task_id, "processing", {
-                        "progress": (idx / total_addresses) * 100,
-                        "current": idx,
-                        "total": total_addresses,
-                        "address": address
-                    })
+            for i in range(0, len(addresses), batch_size):
+                batch_addresses = addresses[i:i + batch_size]
+                
+                # Send progress update
+                self._send_ws_notification(task_id, "processing", {
+                    "progress": (i / total_addresses) * 100,
+                    "current": i,
+                    "total": total_addresses,
+                    "processing": batch_addresses
+                })
 
-                    scraper_service = MistTrackScraperService(address=address, network=network)
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    result = loop.run_until_complete(scraper_service.get_address_info())
-                    loop.close()
-
-                    if result["success"]:
-                        results.append({
-                            "address": address,
-                            "network": network,
-                            "status": "success",
-                            "data": result["data"]
-                        })
-                    else:
-                        results.append({
-                            "address": address,
-                            "network": network,
-                            "status": "error",
-                            "error": result["error"]
-                        })
-                except Exception as e:
-                    results.append({
-                        "address": address,
-                        "network": network,
-                        "status": "error",
-                        "error": str(e)
-                    })
+                # Process batch concurrently
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                batch_results = loop.run_until_complete(
+                    MistTrackScraperService.process_addresses(batch_addresses, network)
+                )
+                loop.close()
+                
+                # Add results
+                results.extend(batch_results)
 
             # Clean up temporary file
             default_storage.delete(path)

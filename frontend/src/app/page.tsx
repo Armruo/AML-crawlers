@@ -197,47 +197,74 @@ export default function Home() {
       title: 'Address',
       dataIndex: 'address',
       key: 'address',
+      render: (text: string, record: any) => {
+        if (record.status === 'error') {
+          return <span style={{ color: 'red' }}>{text}</span>;
+        }
+        return text;
+      }
     },
     {
       title: 'Network',
       dataIndex: 'network',
       key: 'network',
-      render: (network: string) => network || '-',
     },
     {
       title: 'Risk Level',
       dataIndex: ['result', 'risk_level'],
       key: 'risk_level',
-      render: (risk_level: string) => (
-        <span style={{ 
-          color: risk_level === 'Risky' ? '#ff4d4f' : 'inherit',
-          fontWeight: risk_level === 'Risky' ? 'bold' : 'normal'
-        }}>
-          {risk_level || '-'}
-        </span>
-      ),
+      render: (text: string) => {
+        if (!text) return 'N/A';
+        const color = text.toLowerCase().includes('risky') ? 'red' : 'inherit';
+        return <span style={{ color }}>{text}</span>;
+      }
+    },
+    {
+      title: 'Risk Score',
+      dataIndex: ['result', 'risk_score'],
+      key: 'risk_score',
+      render: (text: string) => text || 'N/A'
     },
     {
       title: 'Risk Type',
       dataIndex: ['result', 'risk_type'],
       key: 'risk_type',
-      render: (risk_type: string) => risk_type || '-',
+      render: (text: string) => text || 'N/A'
     },
     {
-      title: 'Address Labels',
-      dataIndex: ['result', 'address_labels'],
-      key: 'address_labels',
-      render: (labels: string[]) => labels ? labels.join(', ') : '-',
+      title: 'Volume',
+      dataIndex: ['result', 'volume'],
+      key: 'volume',
+      render: (text: string) => text || 'N/A'
     },
+    {
+      title: 'Status',
+      key: 'status',
+      render: (_: any, record: any) => {
+        if (record.status === 'error') {
+          return <span style={{ color: 'red' }}>Error: {record.error}</span>;
+        }
+        return <span style={{ color: 'green' }}>Success</span>;
+      }
+    }
   ];
 
   return (
     <Layout className="min-h-screen">
       <Header className="flex items-center justify-between">
-        <motion.h1 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="text-white text-xl"
+        <motion.h1
+          className="text-3xl font-bold mb-8"
+          style={{
+            color: '#ffffff',  // 白色文字
+            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',  // 添加文字阴影
+            background: 'linear-gradient(45deg, #1a1a1a, #2d2d2d)',  // 深色渐变背景
+            padding: '0.5rem 1rem',
+            borderRadius: '8px',
+            display: 'inline-block'
+          }}
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
         >
           Misttrack Crawler Dashboard
         </motion.h1>
