@@ -303,7 +303,7 @@ export default function Home() {
 
           return {
             key: address,
-            address: address,  // 只使用地址部分，不包含网络前缀
+            address: address,
             network: network,
             status: result.success ? 'success' : 'error',
             result: {
@@ -324,15 +324,21 @@ export default function Home() {
 
         console.log('Formatted addresses:', formattedAddresses);
         
-        // 更新结果列表和统计信息
-        setResults(prev => [...prev, ...formattedAddresses]);
+        // 更新结果列表，过滤掉重复地址
+        setResults(prev => {
+          const existingAddresses = new Set(prev.map(item => item.address));
+          const newUniqueAddresses = formattedAddresses.filter(
+            item => !existingAddresses.has(item.address)
+          );
+          return [...prev, ...newUniqueAddresses];
+        });
 
         // 更新总任务数和状态
         setStats(prev => ({
           ...prev,
-          total: prev.total + results.length,
-          success: prev.success + results.filter((r: any) => r.success).length,
-          error: prev.error + results.filter((r: any) => !r.success).length
+          total: prev.total + formattedAddresses.length,
+          success: prev.success + formattedAddresses.filter(r => r.status === 'success').length,
+          error: prev.error + formattedAddresses.filter(r => r.status === 'error').length
         }));
 
         // 更新任务进度
@@ -350,6 +356,12 @@ export default function Home() {
   };
 
   const columns = [
+    {
+      title: '#',
+      key: 'index',
+      width: 60,
+      render: (_: any, __: any, index: number) => index + 1,
+    },
     {
       title: 'Address',
       dataIndex: 'address',
@@ -434,14 +446,15 @@ export default function Home() {
       title: 'Network',
       dataIndex: 'network',
       key: 'network',
-      width: 100
+      width: 100,
+      render: (text: string) => text || <span style={{ color: '#d9d9d9' }}>N/A</span>
     },
     {
       title: 'Risk Level',
       dataIndex: ['result', 'risk_level'],
       key: 'risk_level',
       render: (text: string) => {
-        if (!text) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
+        if (!text) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
         const color = text.toLowerCase().includes('risky') ? 'red' : 'inherit';
         return <span style={{ color }}>{text}</span>;
       }
@@ -450,14 +463,14 @@ export default function Home() {
       title: 'Risk Type',
       dataIndex: ['result', 'risk_type'],
       key: 'risk_type',
-      render: (text: string) => text || <span style={{ color: '#bfbfbf' }}>N/A</span>
+      render: (text: string) => text || <span style={{ color: '#d9d9d9' }}>N/A</span>
     },
     {
       title: 'Address/Risk Label',
       dataIndex: ['result', 'address_labels'],
       key: 'address_labels',
       render: (labels: string[]) => {
-        if (!labels || labels.length === 0) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
+        if (!labels || labels.length === 0) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
         return Array.isArray(labels) ? labels.join(', ') : labels;
       }
     },
@@ -465,26 +478,30 @@ export default function Home() {
       title: 'Volume(USD)/%',
       dataIndex: ['result', 'volume'],
       key: 'volume',
-      render: (text: string) => text || <span style={{ color: '#bfbfbf' }}>N/A</span>
+      render: (text: string) => text || <span style={{ color: '#d9d9d9' }}>N/A</span>
     },
+    /* Risk Score column (commented out as requested)
     {
       title: 'Risk Score',
       dataIndex: ['result', 'risk_score'],
       key: 'risk_score',
       render: (text: string | number) => {
-        if (!text && text !== 0) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
+        if (!text && text !== 0) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
         return text;
       }
     },
+    */
+    /* Related Addresses column (commented out as requested)
     {
       title: 'Related Addresses',
       dataIndex: ['result', 'related_addresses'],
       key: 'related_addresses',
       render: (addresses: string[]) => {
-        if (!addresses || addresses.length === 0) return <span style={{ color: '#bfbfbf' }}>N/A</span>;
+        if (!addresses || addresses.length === 0) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
         return addresses.join(', ');
       }
     },
+    */
     {
       title: 'Status',
       key: 'status',
