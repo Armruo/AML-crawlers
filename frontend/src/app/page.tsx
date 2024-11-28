@@ -59,7 +59,8 @@ export default function Home() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [isCsvUploading, setIsCsvUploading] = useState(false);
-  const [results, setResults] = useState<CrawlerResult[]>([]);
+  const [singleResult, setSingleResult] = useState<CrawlerResult | null>(null);
+  const [batchResults, setBatchResults] = useState<CrawlerResult[]>([]);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [stats, setStats] = useState({
     total: 0,
@@ -68,7 +69,6 @@ export default function Home() {
     inProgress: 0
   });
   const [processedAddressNetworks, setProcessedAddressNetworks] = useState<Set<string>>(new Set());
-  const [currentAddressResult, setCurrentAddressResult] = useState<CrawlerResult | null>(null);
 
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
@@ -117,7 +117,7 @@ export default function Home() {
         };
 
         console.log('Adding new result:', newResult);
-        setResults(prev => {
+        setBatchResults(prev => {
           const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
           if (existingAddressNetworks.has(`${newResult.address}-${newResult.network}`)) return prev;
           return [...prev, newResult];
@@ -168,7 +168,7 @@ export default function Home() {
         };
 
         console.log('Adding error result:', newResult);
-        setResults(prev => {
+        setBatchResults(prev => {
           const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
           if (existingAddressNetworks.has(`${newResult.address}-${newResult.network}`)) return prev;
           return [...prev, newResult];
@@ -215,16 +215,10 @@ export default function Home() {
     };
   }, []);
 
-  const onSingleAddressSubmit = async (address: string) => {
-    if (!form.getFieldValue('network')) {
-      message.error('Please select a network first');
-      return;
-    }
-    setLoading(true);
-    setCurrentAddressResult(null);
+  const onSingleAddressSubmit = async (values: any) => {
     try {
-      const network = form.getFieldValue('network');
-      console.log('Submitting single address:', { address, network });
+      setLoading(true);
+      console.log('Form Data:', values);
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
       const response = await fetch(`${apiUrl}/api/crawler/`, {
@@ -234,8 +228,8 @@ export default function Home() {
           'Accept': 'application/json',
         },
         body: JSON.stringify({ 
-          address: address,
-          network: network
+          address: values.address,
+          network: values.network 
         }),
       });
       
@@ -253,15 +247,14 @@ export default function Home() {
       const result = await response.json();
       console.log('Task submitted successfully:', result);
       
-      // Check if result.result exists (the actual data is nested under result.result)
       if (result.result) {
         const newResult: CrawlerResult = {
-          key: address,
-          address: address,
-          network: network,
+          key: values.address,
+          address: values.address,
+          network: values.network,
           status: 'success',
           result: {
-            address: address,
+            address: values.address,
             risk_score: result.result.risk_score || 'N/A',
             risk_level: result.result.risk_level || 'N/A',
             risk_type: result.result.risk_type || 'N/A',
@@ -274,33 +267,12 @@ export default function Home() {
             related_addresses: result.result.related_addresses || []
           }
         };
-        console.log('Setting current address result:', newResult);
-        setCurrentAddressResult(newResult);
-        
-        // Add to results table as well
-        setResults(prev => {
-          const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
-          if (existingAddressNetworks.has(`${newResult.address}-${newResult.network}`)) return prev;
-          return [...prev, newResult];
-        });
-        
+        setSingleResult(newResult);
         message.success('Address analysis completed');
-      } else if (result.error) {
-        const errorResult: CrawlerResult = {
-          key: address,
-          address: address,
-          network: network,
-          status: 'error',
-          error: result.error
-        };
-        setCurrentAddressResult(errorResult);
-        message.error(`Error: ${result.error}`);
       } else {
         console.warn('No result data in response:', result);
         message.warning('No data found for this address');
       }
-      
-      message.success('Task submitted successfully');
     } catch (error) {
       console.error('Task submission error:', error);
       message.error('Failed to submit task: Network error');
@@ -431,7 +403,7 @@ export default function Home() {
         console.log('Formatted addresses:', formattedAddresses);
         
         // 更新结果列表，过滤掉重复地址
-        setResults(prev => {
+        setBatchResults(prev => {
           const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
           const newUniqueAddresses = formattedAddresses.filter(
             item => !existingAddressNetworks.has(`${item.address}-${item.network}`)
@@ -464,7 +436,7 @@ export default function Home() {
   const handleExportTable = () => {
     try {
       // 准备导出数据
-      const exportData = results.map((item, index) => ({
+      const exportData = batchResults.map((item, index) => ({
         'No.': index + 1,
         'Address': item.address,
         'Network': item.network,
@@ -786,12 +758,12 @@ export default function Home() {
                             Start Crawling
                           </Button>
                         }
-                        onSearch={(value) => onSingleAddressSubmit(value)}
+                        onSearch={(value) => onSingleAddressSubmit({ address: value, network: form.getFieldValue('network') })}
                       />
                     </Form.Item>
 
                     <AnimatePresence>
-                      {currentAddressResult && currentAddressResult.result && (
+                      {singleResult && singleResult.result && (
                         <motion.div
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -802,44 +774,44 @@ export default function Home() {
                             <div className="text-center mb-4 flex flex-col items-center">
                               <h4 className="text-lg font-medium mb-2">Risk Assessment Results</h4>
                               <div className={`text-sm ${
-                                currentAddressResult.result.risk_level?.toLowerCase().includes('risky')
+                                singleResult.result.risk_level?.toLowerCase().includes('risky')
                                   ? 'text-red-500'
                                   : 'text-gray-500'
                               }`}>
-                                <span className="font-medium">{currentAddressResult.network}</span>
-                                <span className="mx-2">|</span>
-                                <span className="font-mono break-all">{currentAddressResult.address}</span>
+                                <span className="font-medium">{singleResult.network}</span>
+                                <span className="mx-2"> | </span>
+                                <span className="font-mono break-all">{singleResult.address}</span>
                               </div>
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <span className="text-gray-600">Risk Level: </span>
+                                <span className="text-gray-600 bold">Risk Level: </span>
                                 <span className={`font-medium ${
-                                  currentAddressResult.result.risk_level?.toLowerCase().includes('risky') 
+                                  singleResult.result.risk_level?.toLowerCase().includes('risky') 
                                     ? 'text-red-500' 
                                     : 'text-green-500'
                                 }`}>
-                                  {currentAddressResult.result.risk_level || 'N/A'}
+                                  {singleResult.result.risk_level || 'N/A'}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <span className="text-gray-600">Risk Type: </span>
                                 <span className="font-medium">
-                                  {currentAddressResult.result.risk_type || 'N/A'}
+                                  {singleResult.result.risk_type || 'N/A'}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <span className="text-gray-600">Address Labels: </span>
                                 <span className="font-medium">
-                                  {Array.isArray(currentAddressResult.result.address_labels) 
-                                    ? currentAddressResult.result.address_labels.join(', ') 
-                                    : currentAddressResult.result.address_labels || 'N/A'}
+                                  {Array.isArray(singleResult.result.address_labels) 
+                                    ? singleResult.result.address_labels.join(', ') 
+                                    : singleResult.result.address_labels || 'N/A'}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <span className="text-gray-600">Volume(USD)/%: </span>
                                 <span className="font-medium">
-                                  {currentAddressResult.result.volume || 'N/A'}
+                                  {singleResult.result.volume || 'N/A'}
                                 </span>
                               </div>
                             </div>
@@ -865,13 +837,13 @@ export default function Home() {
                     <div className="text-sm text-gray-500">
                       Supported format: CSV file with addresses in first column
                     </div>
-                    <Button
+                    {/* <Button
                       type="primary"
                       onClick={onBatchSubmit}
                       loading={isCsvUploading}
                     >
                       Start Crawling
-                    </Button>
+                    </Button> */}
                   </div>
                 </div>
               </Form>
@@ -912,7 +884,7 @@ export default function Home() {
                 <h3 className="text-lg font-medium">Crawling Results</h3>
               </div>
               <Table 
-                dataSource={results}
+                dataSource={batchResults}
                 columns={columns}
                 pagination={false}
                 scroll={{ x: 1500 }}
@@ -924,7 +896,7 @@ export default function Home() {
                 }}
                 rowClassName={(record) => record.status === 'error' ? 'error-row' : ''}
                 title={() => (
-                  results.length > 0 && (
+                  batchResults.length > 0 && (
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'flex-end', 
@@ -942,19 +914,19 @@ export default function Home() {
                   )
                 )}
               />
-              {results.length > 0 && (
+              {batchResults.length > 0 && (
                 <div className="mt-4 bg-gray-50 p-4 rounded">
                   <h4 className="text-md font-medium mb-2">Latest Result Details</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm text-gray-600">Risk Score: {results[results.length - 1]?.result?.risk_score || 'N/A'}</p>
-                      <p className="text-sm text-gray-600">Risk Level: {results[results.length - 1]?.result?.risk_level || 'N/A'}</p>
-                      <p className="text-sm text-gray-600">Risk Type: {results[results.length - 1]?.result?.risk_type || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Risk Score: {batchResults[batchResults.length - 1]?.result?.risk_score || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Risk Level: {batchResults[batchResults.length - 1]?.result?.risk_level || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Risk Type: {batchResults[batchResults.length - 1]?.result?.risk_type || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Network: {results[results.length - 1]?.network || 'N/A'}</p>
-                      <p className="text-sm text-gray-600">Labels: {results[results.length - 1]?.result?.address_labels?.join(', ') || 'None'}</p>
-                      <p className="text-sm text-gray-600">Volume: {results[results.length - 1]?.result?.volume || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Network: {batchResults[batchResults.length - 1]?.network || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Labels: {batchResults[batchResults.length - 1]?.result?.address_labels?.join(', ') || 'None'}</p>
+                      <p className="text-sm text-gray-600">Volume: {batchResults[batchResults.length - 1]?.result?.volume || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
