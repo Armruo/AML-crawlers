@@ -49,7 +49,7 @@ class MistTrackScraperService:
             cached_result = self.cache_manager.get_cached_result(self.address, self.network)
             if cached_result:
                 logger.info(f"Cache hit for {self.address} on {self.network}")
-                logger.info(f"Using cached result for {self.address}")
+                logger.info(f"Using cached result for {self.address}: {cached_result}")
                 return {"success": True, "data": cached_result}
 
             # 如果没有缓存，爬取数据

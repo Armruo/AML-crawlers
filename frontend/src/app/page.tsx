@@ -67,6 +67,7 @@ export default function Home() {
     inProgress: 0
   });
   const [processedAddressNetworks, setProcessedAddressNetworks] = useState<Set<string>>(new Set());
+  const [currentAddressResult, setCurrentAddressResult] = useState<CrawlerResult | null>(null);
 
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
@@ -219,6 +220,7 @@ export default function Home() {
       return;
     }
     setLoading(true);
+    setCurrentAddressResult(null);
     try {
       const network = form.getFieldValue('network');
       console.log('Submitting single address:', { address, network });
@@ -249,6 +251,54 @@ export default function Home() {
       
       const result = await response.json();
       console.log('Task submitted successfully:', result);
+      
+      // Check if result.result exists (the actual data is nested under result.result)
+      if (result.result) {
+        const newResult: CrawlerResult = {
+          key: address,
+          address: address,
+          network: network,
+          status: 'success',
+          result: {
+            address: address,
+            risk_score: result.result.risk_score || 'N/A',
+            risk_level: result.result.risk_level || 'N/A',
+            risk_type: result.result.risk_type || 'N/A',
+            address_labels: typeof result.result.address_labels === 'string' 
+              ? [result.result.address_labels] 
+              : result.result.address_labels || [],
+            volume: result.result.volume || 'N/A',
+            labels: result.result.labels || [],
+            transactions: result.result.transactions || [],
+            related_addresses: result.result.related_addresses || []
+          }
+        };
+        console.log('Setting current address result:', newResult);
+        setCurrentAddressResult(newResult);
+        
+        // Add to results table as well
+        setResults(prev => {
+          const existingAddressNetworks = new Set(prev.map(item => `${item.address}-${item.network}`));
+          if (existingAddressNetworks.has(`${newResult.address}-${newResult.network}`)) return prev;
+          return [...prev, newResult];
+        });
+        
+        message.success('Address analysis completed');
+      } else if (result.error) {
+        const errorResult: CrawlerResult = {
+          key: address,
+          address: address,
+          network: network,
+          status: 'error',
+          error: result.error
+        };
+        setCurrentAddressResult(errorResult);
+        message.error(`Error: ${result.error}`);
+      } else {
+        console.warn('No result data in response:', result);
+        message.warning('No data found for this address');
+      }
+      
       message.success('Task submitted successfully');
     } catch (error) {
       console.error('Task submission error:', error);
@@ -739,6 +789,60 @@ export default function Home() {
                         onSearch={(value) => onSingleAddressSubmit(value)}
                       />
                     </Form.Item>
+
+                    <AnimatePresence>
+                      {currentAddressResult && currentAddressResult.result && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          className="mt-4"
+                        >
+                          <Card className="bg-white shadow-sm">
+                            <div className="text-center mb-4">
+                              <h4 className="text-lg font-medium mb-2">Risk Assessment Results</h4>
+                              <div className="text-sm text-gray-500">
+                                <span className="font-medium">{currentAddressResult.network}</span>
+                                <span className="mx-2"> | </span>
+                                <span className="font-mono">{currentAddressResult.address}</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-600">Risk Level: </span>
+                                <span className={`font-medium ${
+                                  currentAddressResult.result.risk_level?.toLowerCase().includes('risky') 
+                                    ? 'text-red-500' 
+                                    : 'text-green-500'
+                                }`}>
+                                  {currentAddressResult.result.risk_level || 'N/A'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-600">Risk Type: </span>
+                                <span className="font-medium">
+                                  {currentAddressResult.result.risk_type || 'N/A'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-600">Address Labels: </span>
+                                <span className="font-medium">
+                                  {Array.isArray(currentAddressResult.result.address_labels) 
+                                    ? currentAddressResult.result.address_labels.join(', ') 
+                                    : currentAddressResult.result.address_labels || 'N/A'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-600">Volume(USD)/%: </span>
+                                <span className="font-medium">
+                                  {currentAddressResult.result.volume || 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </Card>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-lg">
