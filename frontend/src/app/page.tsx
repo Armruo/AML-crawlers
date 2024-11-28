@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Layout, Form, Input, Button, Upload, Table, message, Card, Progress, Statistic, Row, Col, Spin, Select, Tooltip } from 'antd';
-import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
+import { UploadOutlined, DashboardOutlined, CheckCircleOutlined, SyncOutlined, LoadingOutlined, CopyOutlined, DownloadOutlined, LinkOutlined } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadProps } from 'antd';
 import { log } from 'console';
@@ -431,7 +431,7 @@ export default function Home() {
       dataIndex: 'address',
       key: 'address',
       fixed: 'left',
-      width: 400,
+      width: 420,
       sorter: (a, b) => a.address.localeCompare(b.address),
       render: (text: string, record: CrawlerResult) => {
         console.log('Rendering address column:', { text, record });
@@ -469,21 +469,19 @@ export default function Home() {
         };
         
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', width: '100%' }}>
             <Tooltip title={record.address} overlayStyle={{ maxWidth: '500px' }}>
               <span 
                 id={`address-${record.address}`}
                 style={{ 
                   cursor: 'pointer',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  display: 'block',
                   fontFamily: 'monospace',
-                  maxWidth: '340px',
                   color: '#1f1f1f',
                   fontSize: '13px',
-                  letterSpacing: '0.5px'
+                  letterSpacing: '0.5px',
+                  flexGrow: 1,
+                  minWidth: 0,
+                  whiteSpace: 'nowrap'
                 }}
               >
                 {record.address}
@@ -494,6 +492,23 @@ export default function Home() {
               icon={<CopyOutlined style={{ color: '#8c8c8c' }} />}
               size="small"
               onClick={handleCopy}
+              style={{ 
+                padding: '0 4px',
+                height: '24px',
+                width: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            />
+            <Button
+              type="text"
+              icon={<LinkOutlined style={{ color: '#8c8c8c' }} />}
+              size="small"
+              onClick={() => {
+                const url = `https://misttrack.io/aml_risks/${record.network}/${record.address}`;
+                window.open(url, '_blank');
+              }}
               style={{ 
                 padding: '0 4px',
                 height: '24px',
@@ -525,6 +540,7 @@ export default function Home() {
       title: 'Risk Level',
       dataIndex: ['result', 'risk_level'],
       key: 'risk_level',
+      width: 130,
       sorter: (a, b) => {
         const levelA = a.result?.risk_level || '';
         const levelB = b.result?.risk_level || '';
@@ -557,6 +573,7 @@ export default function Home() {
       title: 'Address/Risk Label',
       dataIndex: ['result', 'address_labels'],
       key: 'address_labels',
+      // width: 300,
       render: (labels: string[]) => {
         if (!labels || labels.length === 0) return <span style={{ color: '#d9d9d9' }}>N/A</span>;
         return Array.isArray(labels) ? labels.join(', ') : labels;
@@ -581,6 +598,7 @@ export default function Home() {
         { text: 'Success', value: 'success' },
         { text: 'Error', value: 'error' },
       ],
+      width: 150,
       onFilter: (value: string, record) => record.status === value,
       render: (_: any, record: CrawlerResult) => {
         if (record.status === 'error') {
@@ -755,7 +773,7 @@ export default function Home() {
                         icon={<DownloadOutlined />}
                         onClick={handleExportTable}
                       >
-                        Export Table
+                        Download Table
                       </Button>
                     </div>
                   )
