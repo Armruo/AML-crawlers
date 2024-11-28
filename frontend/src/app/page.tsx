@@ -673,7 +673,8 @@ export default function Home() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-medium mb-3">Option 1: Single Address</h3>
+                  <h3 className="text-lg font-medium mb-3 text-blue-700">Step 2: Input Address</h3>
+                  <h3 className="text-lg font-medium mb-3">Option 1: Single</h3>
                   <Form.Item
                     name="address"
                     className="mb-3"
@@ -695,7 +696,7 @@ export default function Home() {
                 </div>
 
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-medium mb-3">Option 2: Batch Addresses</h3>
+                  <h3 className="text-lg font-medium mb-3">Option 2: Batch</h3>
                   <Form.Item name="file" className="mb-3">
                     <Upload {...uploadProps} className="w-full">
                       <Button 
