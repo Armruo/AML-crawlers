@@ -213,11 +213,58 @@ export default function Home() {
     };
   }, []);
 
-  const onFinish = async (values: any) => {
+  const onSingleAddressSubmit = async (address: string) => {
+    if (!form.getFieldValue('network')) {
+      message.error('Please select a network first');
+      return;
+    }
     setLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      logger.info('API URL:', apiUrl);
+      const network = form.getFieldValue('network');
+      console.log('Submitting single address:', { address, network });
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
+      const response = await fetch(`${apiUrl}/api/crawler/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ 
+          address: address,
+          network: network
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Task submission failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        message.error(`Failed to submit task: ${JSON.stringify(errorData.error || errorData)}`);
+        return;
+      }
+      
+      const result = await response.json();
+      console.log('Task submitted successfully:', result);
+      message.success('Task submitted successfully');
+    } catch (error) {
+      console.error('Task submission error:', error);
+      message.error('Failed to submit task: Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onFinish = async (values: any) => {
+    // This will only be called for batch file upload
+    try {
+      setLoading(true);
+      console.log('Form Data:', values);
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
       const response = await fetch(`${apiUrl}/api/crawler/`, {
         method: 'POST',
         headers: {
@@ -299,24 +346,24 @@ export default function Home() {
         const formattedAddresses = results.map((result: any) => {
           // 从data中提取地址信息
           const fullAddress = result.data?.address || '';
-          const [network, address] = fullAddress.includes('/')
+          const [network, cleanAddress] = fullAddress.includes('/')
             ? fullAddress.split('/')
             : [form.getFieldValue('network'), fullAddress];
             
           console.log('Processing address:', {
             fullAddress,
             network,
-            address,
+            address: cleanAddress,
             result
           });
 
           return {
-            key: address,
-            address: address,
+            key: cleanAddress,
+            address: cleanAddress,
             network: network,
             status: result.success ? 'success' : 'error',
             result: {
-              address: address,
+              address: cleanAddress,
               risk_score: result.data?.risk_score,
               risk_level: result.data?.risk_level,
               risk_type: result.data?.risk_type,
@@ -649,70 +696,70 @@ export default function Home() {
           <Card className="mb-6">
             <div className="mb-6">
               <h2 className="text-xl font-medium mb-4">Cryptocurrency Address Crawler</h2>
-              <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                <h3 className="text-lg font-medium mb-3 text-blue-700">Step 1: Select Network</h3>
-                <Form.Item
-                  name="network"
-                  rules={[{ required: true, message: 'Please select a network' }]}
-                  className="mb-0"
-                >
-                  <Select
-                    placeholder="Select blockchain network"
-                    style={{ width: '100%', maxWidth: '300px' }}
-                    options={[
-                      { value: 'BSC', label: 'Binance Smart Chain (BSC)' },
-                      { value: 'ETH', label: 'Ethereum (ETH)' },
-                      { value: 'SOL', label: 'Solana (SOL)' },
-                    ]}
-                    onChange={(value) => {
-                      form.setFieldsValue({ network: value });
-                    }}
-                  />
-                </Form.Item>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-medium mb-3 text-blue-700">Step 2: Input Address</h3>
-                  <h3 className="text-lg font-medium mb-3">Option 1: Single</h3>
+              <Form form={form} onFinish={onFinish}>
+                <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                  <h3 className="text-lg font-medium mb-3 text-blue-700">Step 1: Select Network</h3>
                   <Form.Item
-                    name="address"
-                    className="mb-3"
+                    name="network"
+                    rules={[{ required: true, message: 'Please select a network' }]}
+                    className="mb-0"
                   >
-                    <Input.Search
-                      placeholder="Enter cryptocurrency address"
-                      enterButton={
-                        <Button 
-                          type="primary"
-                          icon={<DashboardOutlined />}
-                          loading={loading}
-                        >
-                          Start Crawling
-                        </Button>
-                      }
-                      onSearch={onFinish}
+                    <Select
+                      placeholder="Select blockchain network"
+                      style={{ width: '100%', maxWidth: '300px' }}
+                      options={[
+                        { value: 'BSC', label: 'Binance Smart Chain (BSC)' },
+                        { value: 'ETH', label: 'Ethereum (ETH)' },
+                        { value: 'SOL', label: 'Solana (SOL)' },
+                      ]}
                     />
                   </Form.Item>
                 </div>
 
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-medium mb-3">Option 2: Batch</h3>
-                  <Form.Item name="file" className="mb-3">
-                    <Upload {...uploadProps} className="w-full">
-                      <Button 
-                        icon={<UploadOutlined />} 
-                        style={{ width: '100%' }}
-                        loading={loading}
-                      >
-                        Upload CSV File
-                      </Button>
-                    </Upload>
-                  </Form.Item>
-                  <div className="text-sm text-gray-500">
-                    Supported format: CSV file with addresses in first column
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-lg font-medium mb-3 text-blue-700">Step 2: Input Address</h3>
+                    <h3 className="text-lg font-medium mb-3">Option 1: Single</h3>
+                    <Form.Item
+                      name="address"
+                      rules={[{ required: true, message: 'Please input an address' }]}
+                      className="mb-3"
+                    >
+                      <Input.Search
+                        placeholder="Enter cryptocurrency address"
+                        enterButton={
+                          <Button 
+                            type="primary"
+                            icon={<DashboardOutlined />}
+                            loading={loading}
+                          >
+                            Start Crawling
+                          </Button>
+                        }
+                        onSearch={(value) => onSingleAddressSubmit(value)}
+                      />
+                    </Form.Item>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-lg font-medium mb-3">Option 2: Batch</h3>
+                    <Form.Item name="file" className="mb-3">
+                      <Upload {...uploadProps} className="w-full">
+                        <Button 
+                          icon={<UploadOutlined />} 
+                          style={{ width: '100%' }}
+                          loading={loading}
+                        >
+                          Upload CSV File
+                        </Button>
+                      </Upload>
+                    </Form.Item>
+                    <div className="text-sm text-gray-500">
+                      Supported format: CSV file with addresses in first column
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Form>
             </div>
 
             <AnimatePresence>
