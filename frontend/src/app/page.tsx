@@ -695,7 +695,7 @@ export default function Home() {
             whiteSpace: 'nowrap',
             overflow: 'visible'
           }}>
-            Misttrack Crawler Dashboard
+            Misttrack KYA Dashboard
           </h1>
           {/* <div className="text-white flex items-center" style={{
             background: 'rgba(255,255,255,0.1)',
@@ -785,7 +785,7 @@ export default function Home() {
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <span className="text-gray-600 bold">Risk Level: </span>
+                                <span className="text-gray-600">Risk Level: </span>
                                 <span className={`font-medium ${
                                   singleResult.result.risk_level?.toLowerCase().includes('risky') 
                                     ? 'text-red-500' 
