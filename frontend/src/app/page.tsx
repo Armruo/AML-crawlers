@@ -58,6 +58,7 @@ interface CrawlerResult {
 export default function Home() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [isCsvUploading, setIsCsvUploading] = useState(false);
   const [results, setResults] = useState<CrawlerResult[]>([]);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [stats, setStats] = useState({
@@ -308,22 +309,25 @@ export default function Home() {
     }
   };
 
-  const onFinish = async (values: any) => {
-    // This will only be called for batch file upload
+  const onBatchSubmit = async () => {
+    if (!form.getFieldValue('network')) {
+      message.error('Please select a network first');
+      return;
+    }
+    setIsCsvUploading(true);
     try {
-      setLoading(true);
-      console.log('Form Data:', values);
+      const network = form.getFieldValue('network');
+      console.log('Submitting batch task:', { network });
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
-      const response = await fetch(`${apiUrl}/api/crawler/`, {
+      const response = await fetch(`${apiUrl}/api/crawler/batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
         body: JSON.stringify({ 
-          address: values.address,
-          network: values.network 
+          network: network
         }),
       });
       
@@ -341,15 +345,11 @@ export default function Home() {
       const result = await response.json();
       console.log('Task submitted successfully:', result);
       message.success('Task submitted successfully');
-      setStats(prev => ({
-        ...prev,
-        total: prev.total + 1
-      }));
     } catch (error) {
       console.error('Task submission error:', error);
       message.error('Failed to submit task: Network error');
     } finally {
-      setLoading(false);
+      setIsCsvUploading(false);
     }
   };
 
@@ -746,7 +746,7 @@ export default function Home() {
           <Card className="mb-6">
             <div className="mb-6">
               <h2 className="text-xl font-medium mb-4">Cryptocurrency Address Crawler</h2>
-              <Form form={form} onFinish={onFinish}>
+              <Form form={form}>
                 <div className="bg-blue-50 p-4 rounded-lg mb-6">
                   <h3 className="text-lg font-medium mb-3 text-blue-700">Step 1: Select Network</h3>
                   <Form.Item
@@ -799,12 +799,16 @@ export default function Home() {
                           className="mt-4"
                         >
                           <Card className="bg-white shadow-sm">
-                            <div className="text-center mb-4">
+                            <div className="text-center mb-4 flex flex-col items-center">
                               <h4 className="text-lg font-medium mb-2">Risk Assessment Results</h4>
-                              <div className="text-sm text-gray-500">
+                              <div className={`text-sm ${
+                                currentAddressResult.result.risk_level?.toLowerCase().includes('risky')
+                                  ? 'text-red-500'
+                                  : 'text-gray-500'
+                              }`}>
                                 <span className="font-medium">{currentAddressResult.network}</span>
-                                <span className="mx-2"> | </span>
-                                <span className="font-mono">{currentAddressResult.address}</span>
+                                <span className="mx-2">|</span>
+                                <span className="font-mono break-all">{currentAddressResult.address}</span>
                               </div>
                             </div>
                             <div className="space-y-2">
@@ -852,7 +856,7 @@ export default function Home() {
                         <Button 
                           icon={<UploadOutlined />} 
                           style={{ width: '100%' }}
-                          loading={loading}
+                          loading={isCsvUploading}
                         >
                           Upload CSV File
                         </Button>
@@ -861,6 +865,13 @@ export default function Home() {
                     <div className="text-sm text-gray-500">
                       Supported format: CSV file with addresses in first column
                     </div>
+                    <Button
+                      type="primary"
+                      onClick={onBatchSubmit}
+                      loading={isCsvUploading}
+                    >
+                      Start Crawling
+                    </Button>
                   </div>
                 </div>
               </Form>
